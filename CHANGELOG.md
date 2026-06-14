@@ -18,6 +18,33 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Phase 2: add infra/k8s/ Kubernetes manifests directory
+
+**Agent:** claude-sonnet-4-6, Phase 2 implementation
+**Files changed:**
+- `infra/k8s/namespace.yaml` (added)
+- `infra/k8s/backend/configmap.yaml` (added)
+- `infra/k8s/backend/deployment.yaml` (added)
+- `infra/k8s/backend/service.yaml` (added)
+- `infra/k8s/frontend/nginx-configmap.yaml` (added)
+- `infra/k8s/frontend/deployment.yaml` (added)
+- `infra/k8s/frontend/service.yaml` (added)
+- `infra/k8s/ingress/ingress-nginx-values.yaml` (added)
+- `infra/k8s/ingress/ingress.yaml` (added)
+- `infra/k8s/secrets/README.md` (added)
+
+**What changed:**
+- Added `zeropad` namespace manifest
+- Added backend ConfigMap, Deployment (2 replicas, readiness probe on `/health`), and ClusterIP Service
+- Added frontend Deployment with alpine init container that fetches the tarball from GitHub Releases, nginx ConfigMap replicating Caddy SPA/txt fallback routing, and ClusterIP Service
+- Added NGINX Ingress Controller Helm values for bare-metal DaemonSet with hostNetwork
+- Added Ingress routing `zeropad.dev` → frontend and `api.zeropad.dev` → backend with Cloudflare origin TLS
+- Added secrets/README.md documenting the one-time `kubectl create secret tls` bootstrap step
+
+**Why:** Greenfield creation of Kubernetes manifests to enable k3s-based deployment, replacing the current Ansible-only VM deployment approach.
+
+---
+
 ## 2026-06-14 — Terraform: surface worker_private_ip root output and fix dynamic group description
 
 **Agent:** claude-sonnet-4-6, code review fix

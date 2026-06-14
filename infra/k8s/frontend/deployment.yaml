@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: zeropad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      initContainers:
+        - name: fetch-frontend
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              RELEASE_TAG=$(cat /release/tag)
+              wget -O /tmp/frontend.tar.gz \
+                "https://github.com/victorfariafernandes/dopad/releases/download/${RELEASE_TAG}/frontend-${RELEASE_TAG}.tar.gz"
+              tar -xzf /tmp/frontend.tar.gz -C /usr/share/nginx/html
+          volumeMounts:
+            - name: frontend-files
+              mountPath: /usr/share/nginx/html
+            - name: release-tag
+              mountPath: /release
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: frontend-files
+              mountPath: /usr/share/nginx/html
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+      volumes:
+        - name: frontend-files
+          emptyDir: {}
+        - name: release-tag
+          configMap:
+            name: frontend-release-tag
+        - name: nginx-config
+          configMap:
+            name: nginx-frontend-config
