@@ -18,6 +18,26 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Phase 4: Update GitHub Actions deploy workflow for k3s
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Removed `ansible-galaxy collection install community.docker` from the Ansible install step (no longer needed)
+- Renamed install step to "Install Ansible"
+- Added `WORKER_SSH_KNOWN_HOST` secret to SSH setup so the agent node host key is trusted
+- Replaced "Deploy backend and frontend" step with "Deploy to k3s cluster" step:
+  - Switched from inline `-i "${{ secrets.VM_IP }},"` inventory to `-i inventory.ini`
+  - Changed `--tags backend,frontend` to `--tags deploy`
+  - Added `oci_namespace=$OCI_NAMESPACE` to `--extra-vars` (required by k8s-manifests role)
+  - Removed `-e "ansible_user=opc ansible_ssh_private_key_file=..."` (now defined in inventory.ini)
+
+**Why:** Phase 4 task — align the CI/CD workflow with the new k3s-based Ansible playbook that uses file-based inventory and k8s deployment tags instead of the old Docker/Ansible approach.
+
+---
+
 ## 2026-06-14 — fix: Ansible role hardening — 10 code-quality fixes
 
 **Agent:** claude-sonnet-4-6
