@@ -1,0 +1,88 @@
+---
+- name: Synchronize k8s manifests to server
+  synchronize:
+    src: "{{ playbook_dir }}/../../k8s/"
+    dest: /tmp/zeropad-k8s/
+    delete: true
+    recursive: true
+
+- name: Apply namespace
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/namespace.yaml
+
+- name: Install Helm if not present
+  shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Add ingress-nginx Helm repo
+  command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Update Helm repos
+  command: helm repo update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Install or upgrade ingress-nginx
+  command: >
+    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx
+    --namespace ingress-nginx
+    --create-namespace
+    --values /tmp/zeropad-k8s/ingress/ingress-nginx-values.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Create or update backend ConfigMap
+  shell: >
+    k3s kubectl create configmap backend-env
+    --from-literal=ALLOW_ORIGIN=https://{{ domain }}
+    --from-literal=OCI_BUCKET_NAME=zeropad-pads
+    --from-literal=OCI_NAMESPACE={{ oci_namespace }}
+    --namespace=zeropad
+    --dry-run=client -o yaml | k3s kubectl apply -f -
+
+- name: Create or update frontend release-tag ConfigMap
+  shell: >
+    k3s kubectl create configmap frontend-release-tag
+    --from-literal=tag={{ release_tag }}
+    --namespace=zeropad
+    --dry-run=client -o yaml | k3s kubectl apply -f -
+
+- name: Apply backend manifests
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Patch backend image tag
+  command: >
+    k3s kubectl set image deployment/backend
+    backend=ghcr.io/{{ github_owner }}/zeropad-backend:{{ release_tag }}
+    -n zeropad
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply frontend manifests
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/frontend/
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Restart frontend deployment to fetch new release
+  command: k3s kubectl rollout restart deployment/frontend -n zeropad
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply ingress manifest
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/ingress/ingress.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for backend rollout
+  command: k3s kubectl rollout status deployment/backend -n zeropad --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for frontend rollout
+  command: k3s kubectl rollout status deployment/frontend -n zeropad --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml

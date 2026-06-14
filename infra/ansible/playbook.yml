@@ -1,25 +1,31 @@
 ---
-- name: Configure zeropad VM
-  hosts: all
+- name: Configure k3s servers
+  hosts: k3s_server
+  become: true
+  vars:
+    block_device: /dev/sdb
+    data_mount: /data
+  roles:
+    - role: volume
+      tags: [volume, k3s]
+    - role: k3s-server
+      tags: [k3s]
+
+- name: Configure k3s agents
+  hosts: k3s_agent
+  become: true
+  vars:
+    k3s_server_host: "{{ hostvars[groups['k3s_server'][0]]['ansible_host'] }}"
+  roles:
+    - role: k3s-agent
+      tags: [k3s]
+
+- name: Deploy application
+  hosts: k3s_server
   become: true
   vars:
     domain: "zeropad.dev"
     github_owner: "victorfariafernandes"
-    block_device: /dev/sdb
-    data_mount: /data
-    oci_namespace: "{{ lookup('env', 'OCI_NAMESPACE') }}"
-    backend_replicas: 2
-    backend_memory: "256m"
-    backend_memory_reservation: "128m"
-
   roles:
-    - role: volume
-      tags: volume
-    - role: docker
-      tags: docker
-    - role: backend
-      tags: backend
-    - role: frontend
-      tags: frontend
-    - role: caddy
-      tags: caddy
+    - role: k8s-manifests
+      tags: [deploy]

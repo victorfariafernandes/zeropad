@@ -18,6 +18,33 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Phase 3: Refactor Ansible to install k3s and deploy via kubectl/Helm
+
+**Agent:** claude-sonnet-4-6, Phase 3 implementation
+**Files changed:**
+- `infra/ansible/inventory.ini` (modified)
+- `infra/ansible/playbook.yml` (modified)
+- `infra/ansible/roles/k3s-server/tasks/main.yml` (added)
+- `infra/ansible/roles/k3s-agent/tasks/main.yml` (added)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (added)
+- `infra/ansible/roles/docker/` (deleted)
+- `infra/ansible/roles/backend/` (deleted)
+- `infra/ansible/roles/frontend/` (deleted)
+- `infra/ansible/roles/caddy/` (deleted)
+
+**What changed:**
+- Replaced single-host `[zeropad]` inventory group with `[k3s_server]` + `[k3s_agent]` + `[k3s_cluster:children]` two-group structure; worker IP is a placeholder (`WORKER_PUBLIC_IP_PLACEHOLDER`) to be filled from `terraform output worker_public_ip`
+- Replaced single-play Docker-based playbook with three plays: configure k3s servers (runs `volume` + `k3s-server` roles on all `k3s_server` hosts), configure k3s agents (runs `k3s-agent` role on all `k3s_agent` hosts), deploy application (runs `k8s-manifests` role on `k3s_server`)
+- Added `k3s-server` role: disables firewalld, installs k3s server with traefik disabled, waits for API readiness, reads the node join token and exposes it as an Ansible fact (`k3s_node_token`) for cross-play consumption
+- Added `k3s-agent` role: disables firewalld, joins each agent to the cluster using the server's IP and the token propagated via `hostvars`
+- Added `k8s-manifests` role: rsync's `infra/k8s/` to remote, applies namespace, installs Helm + ingress-nginx, creates backend and frontend ConfigMaps, applies all backend/frontend/ingress manifests, patches image tags, waits for rollouts to complete
+- Deleted `docker`, `backend`, `frontend`, and `caddy` roles (replaced by k3s + k8s-manifests approach)
+- `volume` role is unchanged
+
+**Why:** Phase 3 of k3s cluster migration — replace Docker/Caddy-based Ansible deployment with k3s installation and Kubernetes-native deploy using the `infra/k8s/` manifests created in Phase 2.
+
+---
+
 ## 2026-06-14 — Phase 2: add infra/k8s/ Kubernetes manifests directory
 
 **Agent:** claude-sonnet-4-6, Phase 2 implementation
