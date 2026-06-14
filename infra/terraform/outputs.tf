@@ -23,6 +23,11 @@ output "worker_public_ip" {
   value       = module.compute.worker_public_ip
 }
 
+output "worker_private_ip" {
+  description = "Private IP of the k3s worker VM (used for k3s cluster join)."
+  value       = module.compute.worker_private_ip
+}
+
 output "worker_ssh_command" {
   description = "SSH command to connect to the worker VM."
   value       = "ssh opc@${module.compute.worker_public_ip}"

@@ -72,7 +72,7 @@ resource "oci_core_instance" "worker" {
 resource "oci_identity_dynamic_group" "backend" {
   compartment_id = var.tenancy_ocid
   name           = "zeropad-backend"
-  description    = "zeropad backend VM for Instance Principal auth"
+  description    = "zeropad backend VMs for Instance Principal auth"
   matching_rule  = "Any {instance.id = '${oci_core_instance.this.id}', instance.id = '${oci_core_instance.worker.id}'}"
 }
 

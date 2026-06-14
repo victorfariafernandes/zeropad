@@ -18,6 +18,21 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Terraform: surface worker_private_ip root output and fix dynamic group description
+
+**Agent:** claude-sonnet-4-6, code review fix
+**Files changed:**
+- `infra/terraform/outputs.tf`
+- `infra/terraform/modules/compute/main.tf`
+
+**What changed:**
+- Added `worker_private_ip` root-level output in `outputs.tf`, surfacing `module.compute.worker_private_ip` for Ansible k3s join configuration
+- Fixed `oci_identity_dynamic_group.backend` `description` field: "VM" → "VMs" (plural, matches the matching rule which covers both instances)
+
+**Why:** Code review identified the root outputs file was missing `worker_private_ip` (needed by Ansible for k3s cluster join) and a minor description typo in the dynamic group resource.
+
+---
+
 ## 2026-06-14 — Terraform: add k3s worker node (Node 2) and update networking
 
 **Agent:** claude-sonnet-4-6, Phase 1 Terraform changes
