@@ -1,4 +1,16 @@
 ---
+- name: Ensure rsync is installed
+  dnf:
+    name: rsync
+    state: present
+
+- name: Validate required deploy variables
+  assert:
+    that:
+      - release_tag is defined and release_tag | length > 0
+      - oci_namespace is defined and oci_namespace | length > 0
+    fail_msg: "release_tag and oci_namespace must be passed via --extra-vars"
+
 - name: Synchronize k8s manifests to server
   synchronize:
     src: "{{ playbook_dir }}/../../k8s/"
@@ -8,6 +20,8 @@
 
 - name: Apply namespace
   command: k3s kubectl apply -f /tmp/zeropad-k8s/namespace.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Install Helm if not present
   shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -15,7 +29,7 @@
     creates: /usr/local/bin/helm
 
 - name: Add ingress-nginx Helm repo
-  command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+  command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
@@ -41,6 +55,8 @@
     --from-literal=OCI_NAMESPACE={{ oci_namespace }}
     --namespace=zeropad
     --dry-run=client -o yaml | k3s kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Create or update frontend release-tag ConfigMap
   shell: >
@@ -48,9 +64,16 @@
     --from-literal=tag={{ release_tag }}
     --namespace=zeropad
     --dry-run=client -o yaml | k3s kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
-- name: Apply backend manifests
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/
+- name: Apply backend deployment
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/deployment.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply backend service
+  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/service.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 

@@ -16,6 +16,13 @@
   become: true
   vars:
     k3s_server_host: "{{ hostvars[groups['k3s_server'][0]]['ansible_host'] }}"
+  pre_tasks:
+    - name: Ensure worker IP has been configured
+      assert:
+        that: ansible_host != 'WORKER_PUBLIC_IP_PLACEHOLDER'
+        fail_msg: >
+          Worker IP is still the placeholder. Update inventory.ini with the actual
+          IP from: terraform output worker_public_ip
   roles:
     - role: k3s-agent
       tags: [k3s]

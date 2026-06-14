@@ -18,6 +18,30 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — fix: Ansible role hardening — 10 code-quality fixes
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/ansible/playbook.yml` (modified)
+- `infra/ansible/roles/k3s-agent/tasks/main.yml` (modified)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (modified)
+
+**What changed:**
+- [playbook.yml] Added `pre_tasks` assert to the k3s-agent play to fail fast when worker IP is still the placeholder value
+- [k3s-agent] Replaced `hostvars` cross-play token reference with `delegate_to` slurp + set_fact — role now self-sufficient with `--limit k3s_agent`
+- [k3s-agent] Added `wait_for` task to verify k3s API port 6443 is reachable before agent join
+- [k3s-agent] Changed `creates:` guard from `/usr/local/bin/k3s` to `/etc/systemd/system/k3s-agent.service` for correct idempotency
+- [k3s-agent] Changed `--node-name=zeropad-worker` to `--node-name={{ inventory_hostname }}` to support multiple workers
+- [k8s-manifests] Added `rsync` install task as first task so `synchronize` module has its dependency
+- [k8s-manifests] Added `assert` task to validate `release_tag` and `oci_namespace` are defined before applying manifests
+- [k8s-manifests] Replaced `kubectl apply -f backend/` directory apply with individual `deployment.yaml` and `service.yaml` applies to prevent ConfigMap overwrite
+- [k8s-manifests] Added `--force-update` to `helm repo add` for idempotency
+- [k8s-manifests] Added `KUBECONFIG` env var to "Apply namespace", "Create or update backend ConfigMap", and "Create or update frontend release-tag ConfigMap" tasks
+
+**Why:** Code quality review identified 10 critical/important issues in the Ansible roles; all have been resolved.
+
+---
+
 ## 2026-06-14 — Phase 3: Refactor Ansible to install k3s and deploy via kubectl/Helm
 
 **Agent:** claude-sonnet-4-6, Phase 3 implementation
