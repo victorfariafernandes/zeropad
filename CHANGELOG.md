@@ -18,6 +18,23 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — fix: CI/Ansible code review blockers
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.gitignore` (modified)
+- `infra/ansible/playbook.yml` (modified)
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Removed `infra/ansible/inventory.ini` from `.gitignore` so the file-based inventory is tracked in git (CI references it with `-i inventory.ini`)
+- Added `pre_tasks` guard to the "Deploy application" play in `playbook.yml` asserting the worker IP placeholder has been replaced — fires even when `--tags deploy` skips the k3s_agent play
+- Added `ANSIBLE_HOST_KEY_CHECKING: "False"` env var to the "Deploy to k3s cluster" step in `deploy.yml` to prevent SSH fingerprint mismatches from hanging the deploy
+
+**Why:** Code review identified these as critical blockers: inventory.ini being gitignored breaks CI, the placeholder guard only ran during k3s_agent provisioning (not deploy-only runs), and missing host key checking could cause silent CI hangs.
+
+---
+
 ## 2026-06-14 — Phase 4: Update GitHub Actions deploy workflow for k3s
 
 **Agent:** claude-sonnet-4-6

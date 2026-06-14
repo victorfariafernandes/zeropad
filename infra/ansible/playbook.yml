@@ -33,6 +33,14 @@
   vars:
     domain: "zeropad.dev"
     github_owner: "victorfariafernandes"
+  pre_tasks:
+    - name: Ensure worker IP has been configured in inventory
+      assert:
+        that: >
+          hostvars[groups['k3s_agent'][0]]['ansible_host'] != 'WORKER_PUBLIC_IP_PLACEHOLDER'
+        fail_msg: >
+          Worker IP is still the placeholder in inventory.ini. Update it with the
+          actual IP from: terraform output worker_public_ip
   roles:
     - role: k8s-manifests
       tags: [deploy]
