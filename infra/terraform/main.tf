@@ -91,8 +91,10 @@ module "compute" {
   image_id            = data.oci_core_images.ol9_arm.images[0].id
   ssh_public_key        = var.ssh_public_key
   ssh_deploy_public_key = var.ssh_deploy_public_key
-  vm_ocpus            = var.vm_ocpus
-  vm_memory_gbs       = var.vm_memory_gbs
+  vm_ocpus             = var.vm_ocpus
+  vm_memory_gbs        = var.vm_memory_gbs
+  worker_vm_ocpus      = var.worker_vm_ocpus
+  worker_vm_memory_gbs = var.worker_vm_memory_gbs
 }
 
 resource "oci_identity_policy" "backend_object_storage" {

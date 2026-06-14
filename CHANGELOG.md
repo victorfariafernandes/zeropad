@@ -18,6 +18,31 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Terraform: add k3s worker node (Node 2) and update networking
+
+**Agent:** claude-sonnet-4-6, Phase 1 Terraform changes
+**Files changed:**
+- `infra/terraform/modules/compute/main.tf`
+- `infra/terraform/modules/compute/variables.tf`
+- `infra/terraform/modules/compute/outputs.tf`
+- `infra/terraform/modules/networking/main.tf`
+- `infra/terraform/main.tf`
+- `infra/terraform/variables.tf`
+- `infra/terraform/outputs.tf`
+
+**What changed:**
+- Added `oci_core_instance.worker` resource (2 OCPU / 12 GB RAM ARM VM) as k3s worker node
+- Updated IAM dynamic group `matching_rule` to include both Node 1 and Node 2 instance IDs
+- Added `worker_vm_ocpus` and `worker_vm_memory_gbs` variables to compute module, root variables, and root module call
+- Added `worker_public_ip` and `worker_private_ip` outputs to compute module
+- Added `worker_public_ip` and `worker_ssh_command` outputs to root outputs
+- Downsized Node 1 defaults: `vm_ocpus` 4→2, `vm_memory_gbs` 8/24→12 (module/root)
+- Added three internal-only ingress security rules to networking: k3s API server (TCP 6443), Flannel VXLAN (UDP 8472), kubelet API (TCP 10250) — all scoped to VCN CIDR 10.0.0.0/16
+
+**Why:** Phase 1 of k3s Kubernetes cluster setup — provision a second OCI ARM VM as a worker node and open the necessary inter-node ports for cluster communication.
+
+---
+
 ## 2026-06-14 — Fix /health handler: method guard and error logging
 
 **Agent:** claude-sonnet-4-6, code quality fix
