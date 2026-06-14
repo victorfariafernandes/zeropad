@@ -18,6 +18,20 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — docs: add required GitHub Actions secrets table to infra/k8s/secrets/README.md
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/k8s/secrets/README.md` (modified)
+
+**What changed:**
+- Added "Required GitHub Actions Secrets" section with a table documenting SSH_PRIVATE_KEY, SSH_KNOWN_HOST, WORKER_SSH_KNOWN_HOST, and OCI_NAMESPACE — including how to obtain each value
+- Added note listing VM_IP as an obsolete secret that can be removed from GitHub settings
+
+**Why:** Code review identified missing secrets documentation as an important gap; operators need to know which GitHub Actions secrets to provision before the deploy workflow can run.
+
+---
+
 ## 2026-06-14 — refactor: scalable for_each DNS records for worker VMs
 
 **Agent:** claude-sonnet-4-6
