@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -41,6 +42,12 @@ func main() {
 	writeLimiter := middlewares.NewRateLimit(10)
 
 	padHandler.Register(mux, cors, writeLimiter)
+
+	mux.HandleFunc("/health", cors(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}))
 
 	log.Printf("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))

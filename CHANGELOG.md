@@ -18,6 +18,78 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Add /health endpoint to Go backend
+
+**Agent:** claude-sonnet-4-6, Phase 0 infra task
+**Files changed:** `backend/main.go`
+
+**What changed:**
+- Added `GET /health` handler on the existing `mux`, wrapped with the `cors` middleware, returning HTTP 200 with `{"status":"ok"}`
+- Added `encoding/json` import to support inline JSON encoding
+
+**Why:** Prerequisite for Kubernetes liveness/readiness probes in the upcoming backend deployment manifest.
+
+---
+
+## 2026-05-23 — Add pad ownership, presentation mode, marketplace, and no-KYC principle to roadmap
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Added "Core principles" section establishing no-KYC and privacy-first as hard constraints
+- Updated Phase 1.1 table list: added `pad_bids`; noted `presentation_mode`, `for_sale`, `min_bid_*` fields in `pad_meta`
+- Added Phase 3.3 Pad claiming — paid user can take ownership of anonymous/free-owned pads
+- Added Phase 3.4 Presentation mode — owner can make a pad publicly readable but not editable
+- Added Phase 3.5 Pad marketplace — paid users can list pads for sale and receive crypto bids; v1 wallet-to-wallet, v2 escrow smart contract
+- Replaced Phase 3.6 Stripe billing with Phase 3.9 crypto-native billing (ETH/USDC/Lightning/Monero, no KYC)
+- Renumbered Phase 3.3–3.6 → 3.6–3.9 to accommodate new sections
+- Fixed Phase 4.1 team invite to use username/wallet instead of email
+- Fixed Phase 5 to remove Stripe and email references
+
+**Why:** User defined no-KYC as a core product principle and requested pad claiming, presentation mode, and a crypto-native pad marketplace.
+
+---
+
+## 2026-05-23 — Update roadmap auth to use random ID and SIWE/SIWX
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Replaced email + password auth in Phase 1.3 with two passwordless methods: random UUID identity and SIWE/SIWX wallet login
+
+**Why:** User wants auth to be passwordless — either a randomly generated ID the user saves, or wallet-based login via SIWE (already implemented for key derivation).
+
+---
+
+## 2026-05-23 — Update roadmap with SQLite-on-Block-Volume storage approach
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Rewrote Phase 1 storage section: replaced generic "add a database" with concrete SQLite-on-OCI-Block-Volume plan (Option A)
+- Added full SQLite schema for all tables: `users`, `sessions`, `pad_meta`, `namespaces`, `api_keys`, `api_usage`, `teams`, `team_members`, `audit_log`
+- Added Phase 1.2: OCI Object Storage lifecycle rule for free-tier TTL (tags `tier=free`/`tier=paid` at upload; Oracle handles deletion — no background job)
+- Expanded all phases with concrete implementation details reflecting the OCI + SQLite dual-store architecture
+
+**Why:** User confirmed Option A (SQLite on existing Block Volume + OCI Object Storage for content) as the storage strategy; roadmap updated to reflect the actual infra.
+
+---
+
+## 2026-05-23 — Add freemium monetization roadmap
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (created)
+
+**What changed:**
+- Added `docs/roadmap.md` — a phased implementation roadmap for Free / Pro / Team freemium tiers
+
+**Why:** User requested a structured roadmap for monetizing dopad with freemium limits across three tiers (Free, Pro at $8/mo, Team at $24/mo), ordered by implementation priority.
+
+---
+
 ## 2026-05-22 — Content type selector (Text, Rich Text, LaTeX, Code)
 
 **Agent:** claude-sonnet-4-6
