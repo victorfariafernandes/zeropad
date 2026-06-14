@@ -140,7 +140,6 @@ jobs:
         working-directory: infra/ansible
         env:
           OCI_NAMESPACE: ${{ secrets.OCI_NAMESPACE }}
-          ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           ansible-playbook playbook.yml \
             -i inventory.ini \

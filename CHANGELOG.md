@@ -18,6 +18,23 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — refactor: scalable for_each DNS records for worker VMs
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/terraform/modules/dns/variables.tf` (modified)
+- `infra/terraform/modules/dns/main.tf` (modified)
+- `infra/terraform/main.tf` (modified)
+
+**What changed:**
+- Replaced single `worker_public_ip` string variable with `worker_public_ips` list variable (default `[]`) in the dns module
+- Replaced singular `apex_worker` and `api_worker` cloudflare_record resources with `for_each`-based `apex_workers` and `api_workers` resources that iterate over `var.worker_public_ips`
+- Updated dns module call in root `main.tf` to pass `worker_public_ips = [module.compute.worker_public_ip]`
+
+**Why:** User requested scalable round-robin DNS using the `for_each`/list pattern so additional worker IPs can be added without new resource blocks. `terraform validate` and `go build ./...` both pass.
+
+---
+
 ## 2026-06-14 — fix: CI/Ansible code review blockers
 
 **Agent:** claude-sonnet-4-6

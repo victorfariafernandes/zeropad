@@ -22,7 +22,6 @@
     host: "{{ k3s_server_host }}"
     port: 6443
     timeout: 120
-  delegate_to: localhost
 
 - name: Install k3s agent
   shell: |

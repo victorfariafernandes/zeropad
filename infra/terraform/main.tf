@@ -110,5 +110,6 @@ module "dns" {
   source             = "./modules/dns"
   cloudflare_zone_id = var.cloudflare_zone_id
   vm_public_ip       = module.compute.vm_public_ip
+  worker_public_ips  = [module.compute.worker_public_ip]
   domain             = var.domain
 }

@@ -43,13 +43,13 @@ func main() {
 
 	padHandler.Register(mux, cors, writeLimiter)
 
-	mux.HandleFunc("GET /health", cors(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			log.Printf("health encode error: %v", err)
 		}
-	}))
+	})
 
 	log.Printf("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))

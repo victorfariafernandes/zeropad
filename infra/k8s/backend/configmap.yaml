@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: backend-env
-  namespace: zeropad
-data:
-  ALLOW_ORIGIN: "https://zeropad.dev"
-  OCI_BUCKET_NAME: "zeropad-pads"
-  # OCI_NAMESPACE is injected at deploy time via kubectl create configmap --from-literal
