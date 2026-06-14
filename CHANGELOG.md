@@ -45,6 +45,22 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — fix: add livenessProbe, CPU limit to backend and readinessProbe to frontend k8s manifests
+
+**Agent:** claude-sonnet-4-6, code review fix
+**Files changed:**
+- `infra/k8s/backend/deployment.yaml`
+- `infra/k8s/frontend/deployment.yaml`
+
+**What changed:**
+- Added `livenessProbe` (httpGet `/health:8080`, initialDelay 15s, period 20s, failureThreshold 3) to backend container
+- Added `cpu: "500m"` to backend `resources.limits` (was memory-only)
+- Added `readinessProbe` (httpGet `/:80`, initialDelay 3s, period 5s) to frontend nginx container
+
+**Why:** Code review identified three critical quality issues: missing liveness probe on backend, missing CPU resource limit on backend, and missing readiness probe on frontend nginx container.
+
+---
+
 ## 2026-06-14 — Terraform: surface worker_private_ip root output and fix dynamic group description
 
 **Agent:** claude-sonnet-4-6, code review fix
