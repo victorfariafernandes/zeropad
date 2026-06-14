@@ -18,6 +18,19 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — Fix /health handler: method guard and error logging
+
+**Agent:** claude-sonnet-4-6, code quality fix
+**Files changed:** `backend/main.go`
+
+**What changed:**
+- Changed `/health` route pattern to `GET /health` (Go 1.22+ method-qualified mux pattern) so non-GET requests automatically receive `405 Method Not Allowed`
+- Assigned the return value of `json.NewEncoder(w).Encode(...)` and logged any error via `log.Printf`, matching the `writeJSON` convention used elsewhere in the codebase
+
+**Why:** Code review identified two issues: silently discarded JSON encode errors and no HTTP method guard on the health endpoint.
+
+---
+
 ## 2026-06-14 — Add /health endpoint to Go backend
 
 **Agent:** claude-sonnet-4-6, Phase 0 infra task
