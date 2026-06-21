@@ -2,11 +2,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
+	"zeropad-backend/adapters/db"
 	httpadapter "zeropad-backend/adapters/http"
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/middlewares"
@@ -29,6 +31,15 @@ func selectStore() store.PadStore {
 }
 
 func main() {
+	if os.Getenv("POSTGRES_URL") != "" {
+		database, err := db.Init(context.Background())
+		if err != nil {
+			log.Fatalf("failed to init database: %v", err)
+		}
+		defer database.Close()
+		log.Printf("connected to PostgreSQL metadata store")
+	}
+
 	padStore := selectStore()
 	padHandler := httpadapter.NewPadHandler(padsvc.New(padStore))
 

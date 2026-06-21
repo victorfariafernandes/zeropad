@@ -15,7 +15,7 @@
   hosts: k3s_agent
   become: true
   vars:
-    k3s_server_host: "{{ hostvars[groups['k3s_server'][0]]['ansible_host'] }}"
+    k3s_server_host: "{{ hostvars[groups['k3s_server'][0]]['ansible_default_ipv4']['address'] }}"
   pre_tasks:
     - name: Ensure worker IP has been configured
       assert:

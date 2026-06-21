@@ -13,99 +13,170 @@
 
 - name: Synchronize k8s manifests to server
   synchronize:
-    src: "{{ playbook_dir }}/../../k8s/"
+    src: "{{ playbook_dir }}/../k8s/"
     dest: /tmp/zeropad-k8s/
     delete: true
     recursive: true
 
 - name: Apply namespace
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/namespace.yaml
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/namespace.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Install Helm if not present
-  shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; test -f /usr/local/bin/helm
   args:
     creates: /usr/local/bin/helm
 
 - name: Add ingress-nginx Helm repo
-  command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update
+  command: /usr/local/bin/helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Add CloudNativePG Helm repo
+  command: /usr/local/bin/helm repo add cloudnative-pg https://cloudnative-pg.github.io/charts --force-update
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Update Helm repos
-  command: helm repo update
+  command: /usr/local/bin/helm repo update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Install or upgrade CloudNativePG operator
+  command: >
+    /usr/local/bin/helm upgrade --install cnpg cloudnative-pg/cloudnative-pg
+    --namespace cnpg-system
+    --create-namespace
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for CNPG operator to be ready
+  command: >
+    /usr/local/bin/k3s kubectl rollout status deployment/cnpg-cloudnative-pg
+    -n cnpg-system --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply postgres namespace
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/postgres/namespace.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Create postgres backup credentials secret
+  shell: >
+    /usr/local/bin/k3s kubectl create secret generic postgres-backup-credentials
+    --from-literal=ACCESS_KEY_ID={{ postgres_backup_access_key_id }}
+    --from-literal=SECRET_ACCESS_KEY={{ postgres_backup_secret_access_key }}
+    --namespace=postgres
+    --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply PostgreSQL cluster
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/postgres/cluster.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Apply scheduled backup
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/postgres/scheduled-backup.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for PostgreSQL cluster to be ready
+  command: >
+    /usr/local/bin/k3s kubectl wait cluster/zeropad-pg
+    --for=condition=Ready
+    --namespace=postgres
+    --timeout=300s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Copy CNPG app secret to zeropad namespace
+  shell: |
+    URI=$(/usr/local/bin/k3s kubectl get secret zeropad-pg-app -n postgres -o jsonpath='{.data.uri}')
+    /usr/local/bin/k3s kubectl create secret generic zeropad-pg-app \
+      --from-literal=uri=$(echo "$URI" | base64 -d) \
+      --namespace=zeropad \
+      --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Install or upgrade ingress-nginx
   command: >
-    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx
+    /usr/local/bin/helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx
     --namespace ingress-nginx
     --create-namespace
     --values /tmp/zeropad-k8s/ingress/ingress-nginx-values.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
+- name: Wait for ingress-nginx controller to be ready
+  command: >
+    /usr/local/bin/k3s kubectl rollout status daemonset/ingress-nginx-controller
+    -n ingress-nginx --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
 - name: Create or update backend ConfigMap
   shell: >
-    k3s kubectl create configmap backend-env
+    /usr/local/bin/k3s kubectl create configmap backend-env
     --from-literal=ALLOW_ORIGIN=https://{{ domain }}
     --from-literal=OCI_BUCKET_NAME=zeropad-pads
     --from-literal=OCI_NAMESPACE={{ oci_namespace }}
     --namespace=zeropad
-    --dry-run=client -o yaml | k3s kubectl apply -f -
+    --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Create or update frontend release-tag ConfigMap
   shell: >
-    k3s kubectl create configmap frontend-release-tag
+    /usr/local/bin/k3s kubectl create configmap frontend-release-tag
     --from-literal=tag={{ release_tag }}
     --namespace=zeropad
-    --dry-run=client -o yaml | k3s kubectl apply -f -
+    --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Apply backend deployment
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/deployment.yaml
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/backend/deployment.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Apply backend service
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/backend/service.yaml
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/backend/service.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Patch backend image tag
   command: >
-    k3s kubectl set image deployment/backend
+    /usr/local/bin/k3s kubectl set image deployment/backend
     backend=ghcr.io/{{ github_owner }}/zeropad-backend:{{ release_tag }}
     -n zeropad
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Apply frontend manifests
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/frontend/
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/frontend/
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Restart frontend deployment to fetch new release
-  command: k3s kubectl rollout restart deployment/frontend -n zeropad
+  command: /usr/local/bin/k3s kubectl rollout restart deployment/frontend -n zeropad
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Apply ingress manifest
-  command: k3s kubectl apply -f /tmp/zeropad-k8s/ingress/ingress.yaml
+  command: /usr/local/bin/k3s kubectl apply -f /tmp/zeropad-k8s/ingress/ingress.yaml
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Wait for backend rollout
-  command: k3s kubectl rollout status deployment/backend -n zeropad --timeout=120s
+  command: /usr/local/bin/k3s kubectl rollout status deployment/backend -n zeropad --timeout=120s
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Wait for frontend rollout
-  command: k3s kubectl rollout status deployment/frontend -n zeropad --timeout=120s
+  command: /usr/local/bin/k3s kubectl rollout status deployment/frontend -n zeropad --timeout=120s
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml

@@ -36,12 +36,18 @@ resource "oci_core_instance" "this" {
   }
 
   preserve_boot_volume = false
+
+  lifecycle {
+    ignore_changes = [source_details]
+  }
 }
 
 resource "oci_core_instance" "worker" {
+  count = var.worker_count
+
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
-  display_name        = "zeropad-worker"
+  display_name        = "zeropad-worker-${count.index + 1}"
   shape               = "VM.Standard.A1.Flex"
 
   shape_config {
@@ -58,8 +64,8 @@ resource "oci_core_instance" "worker" {
   create_vnic_details {
     subnet_id        = var.subnet_id
     assign_public_ip = true
-    display_name     = "zeropad-worker-vnic"
-    hostname_label   = "zeropad-worker"
+    display_name     = "zeropad-worker-${count.index + 1}-vnic"
+    hostname_label   = "zeropad-worker-${count.index + 1}"
   }
 
   metadata = {
@@ -67,13 +73,17 @@ resource "oci_core_instance" "worker" {
   }
 
   preserve_boot_volume = false
+
+  lifecycle {
+    ignore_changes = [source_details]
+  }
 }
 
 resource "oci_identity_dynamic_group" "backend" {
   compartment_id = var.tenancy_ocid
   name           = "zeropad-backend"
   description    = "zeropad backend VMs for Instance Principal auth"
-  matching_rule  = "Any {instance.id = '${oci_core_instance.this.id}', instance.id = '${oci_core_instance.worker.id}'}"
+  matching_rule  = "Any {instance.id = '${oci_core_instance.this.id}', ${join(", ", [for w in oci_core_instance.worker : "instance.id = '${w.id}'"])}}"
 }
 
 resource "oci_core_volume_attachment" "data" {

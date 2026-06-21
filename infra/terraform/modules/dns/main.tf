@@ -18,14 +18,14 @@ resource "cloudflare_record" "apex" {
 }
 
 resource "cloudflare_record" "apex_workers" {
-  for_each = toset(var.worker_public_ips)
-  zone_id  = var.cloudflare_zone_id
-  name     = var.domain
-  type     = "A"
-  content  = each.value
-  proxied  = true
-  ttl      = 1
-  comment  = "Managed by Terraform — zeropad worker VM"
+  count   = length(var.worker_public_ips)
+  zone_id = var.cloudflare_zone_id
+  name    = var.domain
+  type    = "A"
+  content = var.worker_public_ips[count.index]
+  proxied = true
+  ttl     = 1
+  comment = "Managed by Terraform — zeropad worker VM"
 }
 
 resource "cloudflare_record" "api" {
@@ -39,14 +39,14 @@ resource "cloudflare_record" "api" {
 }
 
 resource "cloudflare_record" "api_workers" {
-  for_each = toset(var.worker_public_ips)
-  zone_id  = var.cloudflare_zone_id
-  name     = "api"
-  type     = "A"
-  content  = each.value
-  proxied  = true
-  ttl      = 1
-  comment  = "Managed by Terraform — zeropad API worker"
+  count   = length(var.worker_public_ips)
+  zone_id = var.cloudflare_zone_id
+  name    = "api"
+  type    = "A"
+  content = var.worker_public_ips[count.index]
+  proxied = true
+  ttl     = 1
+  comment = "Managed by Terraform — zeropad API worker"
 }
 
 resource "cloudflare_record" "www" {

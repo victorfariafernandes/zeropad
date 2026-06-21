@@ -48,7 +48,7 @@ variable "vm_ocpus" {
 variable "vm_memory_gbs" {
   description = "RAM in GB for the Ampere A1 shape."
   type        = number
-  default     = 12
+  default     = 8
 }
 
 variable "worker_vm_ocpus" {
@@ -60,7 +60,13 @@ variable "worker_vm_ocpus" {
 variable "worker_vm_memory_gbs" {
   description = "RAM in GB for the k3s worker VM."
   type        = number
-  default     = 12
+  default     = 8
+}
+
+variable "worker_count" {
+  description = "Number of k3s worker VMs to provision."
+  type        = number
+  default     = 2
 }
 
 variable "block_volume_size_gbs" {

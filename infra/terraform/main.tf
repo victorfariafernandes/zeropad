@@ -95,6 +95,7 @@ module "compute" {
   vm_memory_gbs        = var.vm_memory_gbs
   worker_vm_ocpus      = var.worker_vm_ocpus
   worker_vm_memory_gbs = var.worker_vm_memory_gbs
+  worker_count         = var.worker_count
 }
 
 resource "oci_identity_policy" "backend_object_storage" {
@@ -106,10 +107,19 @@ resource "oci_identity_policy" "backend_object_storage" {
   ]
 }
 
+resource "oci_identity_policy" "postgres_backup_object_storage" {
+  compartment_id = var.compartment_ocid
+  name           = "zeropad-postgres-backup-storage"
+  description    = "Allow backend VMs to manage objects in the postgres backup bucket"
+  statements = [
+    "Allow dynamic-group zeropad-backend to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = 'zeropad-postgres-backups'",
+  ]
+}
+
 module "dns" {
   source             = "./modules/dns"
   cloudflare_zone_id = var.cloudflare_zone_id
   vm_public_ip       = module.compute.vm_public_ip
-  worker_public_ips  = [module.compute.worker_public_ip]
+  worker_public_ips  = module.compute.worker_public_ips
   domain             = var.domain
 }

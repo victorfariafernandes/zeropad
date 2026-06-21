@@ -1,0 +1,40 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: zeropad-pg
+  namespace: postgres
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+
+  bootstrap:
+    initdb:
+      database: zeropad
+      owner: zeropad
+
+  storage:
+    storageClass: local-path
+    size: 20Gi
+
+  affinity:
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+
+  backup:
+    barmanObjectStore:
+      destinationPath: "s3://zeropad-postgres-backups/"
+      endpointURL: "https://idr8mgmtqnu1.compat.objectstorage.us-ashburn-1.oraclecloud.com"
+      s3Credentials:
+        accessKeyId:
+          name: postgres-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: postgres-backup-credentials
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+    retentionPolicy: "7d"

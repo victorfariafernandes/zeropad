@@ -18,17 +18,17 @@ output "frontend_api_url" {
   value       = "https://${var.domain}"
 }
 
-output "worker_public_ip" {
-  description = "Public IP of the k3s worker VM."
-  value       = module.compute.worker_public_ip
+output "worker_public_ips" {
+  description = "Public IPs of all k3s worker VMs."
+  value       = module.compute.worker_public_ips
 }
 
-output "worker_private_ip" {
-  description = "Private IP of the k3s worker VM (used for k3s cluster join)."
-  value       = module.compute.worker_private_ip
+output "worker_private_ips" {
+  description = "Private IPs of all k3s worker VMs (used for k3s cluster join)."
+  value       = module.compute.worker_private_ips
 }
 
-output "worker_ssh_command" {
-  description = "SSH command to connect to the worker VM."
-  value       = "ssh opc@${module.compute.worker_public_ip}"
+output "worker_ssh_commands" {
+  description = "SSH commands to connect to each worker VM."
+  value       = [for ip in module.compute.worker_public_ips : "ssh opc@${ip}"]
 }

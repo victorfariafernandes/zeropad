@@ -22,7 +22,7 @@
     enabled: true
 
 - name: Wait for k3s API to be ready
-  command: k3s kubectl get nodes
+  command: /usr/local/bin/k3s kubectl get nodes
   register: k3s_nodes
   retries: 12
   delay: 10

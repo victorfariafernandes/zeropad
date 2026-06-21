@@ -1,0 +1,194 @@
+# CloudNativePG Metadata Store — Design Spec
+
+**Date:** 2026-06-18
+**Status:** Approved
+
+---
+
+## Context
+
+The dopad backend currently stores encrypted pad blobs in OCI Object Storage and has no relational database. As the product adds user accounts, sessions, and analytics, a metadata store is needed. This spec covers deploying a cloud-native, highly available PostgreSQL cluster on the existing k3s infrastructure using the CloudNativePG operator, and wiring a new metadata adapter into the Go backend.
+
+Pad content (encrypted blobs) remains in OCI Object Storage — unchanged. PostgreSQL is exclusively for metadata. This phase establishes only the `users` table; sessions and pad ownership metadata are out of scope here.
+
+---
+
+## Architecture Overview
+
+```
+                    ┌─────────────────────────────┐
+                    │        k3s Cluster          │
+                    │  (node-1 + node-2 + node-3) │
+                    │                             │
+  ┌──────────────┐  │  ┌────────────────────────┐ │
+  │   Frontend   │  │  │  Backend (zeropad ns)  │ │
+  │  (Next.js)   │  │  │  - OCI store adapter   │ │
+  └──────────────┘  │  │  - db adapter (new)    │ │
+                    │  └────────┬───────────────┘ │
+                    │           │ POSTGRES_URL     │
+                    │  ┌────────▼───────────────┐ │
+                    │  │  PostgreSQL Cluster    │ │
+                    │  │  (postgres ns, 3 pods) │ │
+                    │  │  primary + 2 standbys  │ │
+                    │  └────────────────────────┘ │
+                    └─────────────────────────────┘
+                               │
+                    WAL archiving (continuous)
+                               │
+                    ┌──────────▼────────────┐
+                    │  OCI Object Storage   │
+                    │  zeropad-postgres-    │
+                    │  backups (new bucket) │
+                    └───────────────────────┘
+```
+
+---
+
+## Section 1: Infrastructure — 3rd Worker Node
+
+**Why:** CloudNativePG's automatic failover requires pods on distinct nodes. A 2-node cluster can't achieve quorum for leader election. A 3rd node enables true HA with zero-touch failover.
+
+**Terraform change** — [infra/terraform/modules/compute/main.tf](../../terraform/modules/compute/main.tf):
+- Add `worker-3` entry to the `worker_nodes` map using the existing `for_each` pattern
+- Same shape: Ampere A1 Flex, 2 OCPUs, 12 GB RAM, Oracle Linux 9
+- Picks up existing security group rules automatically
+
+**New Terraform resource** — [infra/terraform/modules/storage/main.tf](../../terraform/modules/storage/main.tf):
+- New OCI Object Storage bucket: `zeropad-postgres-backups`
+- Private access only; no public reads
+- IAM policy: grant `zeropad-backend` dynamic group access to this bucket
+
+**Ansible change** — [infra/ansible/inventory.ini](../../ansible/inventory.ini):
+- Add worker-3's public IP to the `[workers]` group
+- Existing `k3s-agent` role runs idempotently — no new role needed
+
+---
+
+## Section 2: CloudNativePG Operator
+
+**Operator namespace:** `cnpg-system`
+
+**Installation:** Helm, added as a new task in the Ansible `k8s-manifests` role
+([infra/ansible/roles/k8s-manifests/tasks/main.yml](../../ansible/roles/k8s-manifests/tasks/main.yml)):
+
+```yaml
+- name: Add CloudNativePG Helm repo
+  command: helm repo add cloudnative-pg https://cloudnative-pg.github.io/charts
+
+- name: Install CloudNativePG operator
+  command: >
+    helm upgrade --install cnpg cloudnative-pg/cloudnative-pg
+    --namespace cnpg-system --create-namespace
+    --version <pinned-version>
+```
+
+**arm64:** CloudNativePG publishes multi-arch manifests. The arm64 variant is pulled automatically on Ampere A1 nodes — no image override required.
+
+---
+
+## Section 3: PostgreSQL Cluster
+
+**Kubernetes namespace:** `postgres` (new, isolated from `zeropad` app namespace)
+
+**File:** `infra/k8s/postgres/cluster.yaml`
+
+**Spec summary:**
+- `instances: 3` — 1 primary + 2 streaming standbys
+- Pod anti-affinity: `requiredDuringSchedulingIgnoredDuringExecution` on hostname label — one pod per node
+- Storage: `storageClass: local-path` (k3s built-in), `size: 20Gi` per instance
+- PostgreSQL version: 16
+- Automatic failover: built into CloudNativePG controller — no Patroni or etcd needed
+
+**WAL archiving** (continuous backup to OCI Object Storage):
+```yaml
+backup:
+  barmanObjectStore:
+    destinationPath: "s3://zeropad-postgres-backups/"
+    endpointURL: "https://<namespace>.compat.objectstorage.<region>.oraclecloud.com"
+    s3Credentials:
+      accessKeyId:
+        name: postgres-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: postgres-backup-credentials
+        key: SECRET_ACCESS_KEY
+  wal:
+    compression: gzip
+  retentionPolicy: "7d"
+```
+
+**Scheduled base backup:** `ScheduledBackup` CRD — daily at 02:00 UTC.
+
+**Credentials (auto-generated by CNPG):**
+- `<cluster-name>-superuser` Secret — DBA access
+- `<cluster-name>-app` Secret — app-level user, connection string in `uri` key
+
+---
+
+## Section 4: Backend Metadata Layer
+
+**New folder:** `backend/adapters/db/`
+
+**Files:**
+- `db.go` — opens `pgxpool.Pool` from `POSTGRES_URL` env var; exposes `Close()` and `Pool()`; runs migrations on startup
+- `migrations/001_users.sql` — initial schema (users only)
+
+**Schema (`migrations/001_users.sql`):**
+```sql
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS users (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+Sessions, pad ownership, and analytics tables are out of scope for this phase.
+
+**Startup integration** — `backend/main.go`:
+- If `POSTGRES_URL` is set: initialize `db.Pool`, run migrations
+- If not set: metadata features unavailable; existing pad read/write flow is unaffected (graceful degradation)
+
+**Driver:** `github.com/jackc/pgx/v5` — idiomatic Go Postgres driver, no ORM.
+
+**Secret injection** — `infra/k8s/backend/deployment.yaml`:
+```yaml
+env:
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: <cluster-name>-app   # CNPG-generated Secret
+        key: uri
+```
+Because the Secret lives in the `postgres` namespace, an Ansible task copies it to the `zeropad` namespace on deploy.
+
+---
+
+## Verification
+
+1. **Cluster health:** `kubectl get cluster -n postgres` → `Ready` with 3/3 instances
+2. **Failover test:** Cordon + delete primary pod; confirm standby is promoted and pod count recovers to 3
+3. **WAL archiving:** Check CloudNativePG status for `continuousArchiving: ok`
+4. **Backend connectivity:** `kubectl exec` into backend pod → `psql $POSTGRES_URL -c '\dt'` shows `users` table
+5. **Backup restore drill:** Apply a `Cluster` restore manifest referencing a recent base backup; confirm cluster comes up with data intact
+6. **Backend tests:** `cd backend && go test ./...` — no regressions in existing pad handler tests
+
+---
+
+## Files to Create / Modify
+
+| Path | Action |
+|------|--------|
+| `infra/terraform/modules/compute/main.tf` | Add `worker-3` to worker map |
+| `infra/terraform/modules/storage/main.tf` | Add `zeropad-postgres-backups` bucket + IAM |
+| `infra/ansible/inventory.ini` | Add worker-3 IP to `[workers]` group |
+| `infra/ansible/roles/k8s-manifests/tasks/main.yml` | Add CNPG Helm install + Secret copy tasks |
+| `infra/k8s/postgres/namespace.yaml` | New `postgres` namespace |
+| `infra/k8s/postgres/cluster.yaml` | CloudNativePG `Cluster` CRD (3 instances) |
+| `infra/k8s/postgres/backup-credentials.yaml` | Secret for OCI Object Storage credentials |
+| `infra/k8s/postgres/scheduled-backup.yaml` | `ScheduledBackup` CRD (daily at 02:00 UTC) |
+| `infra/k8s/backend/deployment.yaml` | Add `POSTGRES_URL` env from CNPG Secret |
+| `backend/adapters/db/db.go` | New: connection pool + migration runner |
+| `backend/adapters/db/migrations/001_users.sql` | New: users table only |
+| `backend/go.mod` + `backend/go.sum` | Add `pgx/v5` dependency |
+| `backend/main.go` | Conditional DB init if `POSTGRES_URL` set |
