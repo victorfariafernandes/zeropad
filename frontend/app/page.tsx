@@ -10,6 +10,7 @@ export default function Home() {
   function go() {
     const clean = slug.trim().replace(/^\/+/, "");
     if (!clean) return;
+    if (clean.startsWith("_")) return;
     router.push(`/${clean}`);
   }
 

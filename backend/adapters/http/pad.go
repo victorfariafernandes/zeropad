@@ -39,8 +39,9 @@ func (h *PadHandler) Register(
 	mux *http.ServeMux,
 	cors func(http.HandlerFunc) http.HandlerFunc,
 	rateLimit func(http.HandlerFunc) http.HandlerFunc,
+	reserved func(http.HandlerFunc) http.HandlerFunc,
 ) {
-	mux.HandleFunc("/pads/", cors(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/pads/", cors(reserved(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGet(w, r)
@@ -49,7 +50,7 @@ func (h *PadHandler) Register(
 		default:
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		}
-	}))
+	})))
 }
 
 type padResponse struct {

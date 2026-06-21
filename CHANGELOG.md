@@ -18,6 +18,26 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-21 — feat: reserved path blocklist for `/_` prefix
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `backend/middlewares/reserved.go` (created)
+- `backend/adapters/http/pad.go` (modified)
+- `backend/main.go` (modified)
+- `frontend/app/page.tsx` (modified)
+- `frontend/app/[slug]/PadPageClient.tsx` (modified)
+
+**What changed:**
+- Added `Reserved` middleware in the backend that returns 403 Forbidden for any pad slug starting with `_`
+- Wired the middleware into the `/pads/` handler chain in `Register()`, between CORS and the method dispatch
+- Frontend home page `go()` now silently ignores slugs starting with `_`
+- Frontend pad page silently redirects to `/` if the URL slug starts with `_`
+
+**Why:** Reserve `/_/` as a system path prefix for future pages like `/_/login` and `/_/dashboard`, preventing users from creating pads at those slugs
+
+---
+
 ## 2026-06-14 — docs: add required GitHub Actions secrets table to infra/k8s/secrets/README.md
 
 **Agent:** claude-sonnet-4-6

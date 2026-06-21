@@ -52,7 +52,7 @@ func main() {
 	cors := middlewares.CORS(origin)
 	writeLimiter := middlewares.NewRateLimit(10)
 
-	padHandler.Register(mux, cors, writeLimiter)
+	padHandler.Register(mux, cors, writeLimiter, middlewares.Reserved)
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
