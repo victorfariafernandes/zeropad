@@ -1,0 +1,40 @@
+---
+- name: Disable and stop firewalld
+  systemd:
+    name: firewalld
+    state: stopped
+    enabled: false
+  ignore_errors: true
+
+- name: Read k3s node join token from server
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  delegate_to: "{{ groups['k3s_server'][0] }}"
+  run_once: true
+
+- name: Set k3s node token fact
+  set_fact:
+    k3s_node_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+- name: Wait for k3s API port to be reachable on server
+  wait_for:
+    host: "{{ k3s_server_host }}"
+    port: 6443
+    timeout: 120
+
+- name: Install k3s agent
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      K3S_URL="https://{{ k3s_server_host }}:6443" \
+      K3S_TOKEN="{{ k3s_node_token }}" \
+      INSTALL_K3S_EXEC="agent --node-name={{ inventory_hostname }}" \
+      sh -
+  args:
+    creates: /etc/systemd/system/k3s-agent.service
+
+- name: Enable and start k3s-agent service
+  systemd:
+    name: k3s-agent
+    state: started
+    enabled: true

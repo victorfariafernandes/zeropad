@@ -2,10 +2,13 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
+	"zeropad-backend/adapters/db"
 	httpadapter "zeropad-backend/adapters/http"
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/middlewares"
@@ -28,6 +31,15 @@ func selectStore() store.PadStore {
 }
 
 func main() {
+	if os.Getenv("POSTGRES_URL") != "" {
+		database, err := db.Init(context.Background())
+		if err != nil {
+			log.Fatalf("failed to init database: %v", err)
+		}
+		defer database.Close()
+		log.Printf("connected to PostgreSQL metadata store")
+	}
+
 	padStore := selectStore()
 	padHandler := httpadapter.NewPadHandler(padsvc.New(padStore))
 
@@ -41,6 +53,14 @@ func main() {
 	writeLimiter := middlewares.NewRateLimit(10)
 
 	padHandler.Register(mux, cors, writeLimiter)
+
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			log.Printf("health encode error: %v", err)
+		}
+	})
 
 	log.Printf("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))

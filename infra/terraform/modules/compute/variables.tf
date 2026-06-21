@@ -41,11 +41,29 @@ variable "ssh_deploy_public_key" {
 variable "vm_ocpus" {
   description = "Number of OCPUs for the Ampere A1 shape."
   type        = number
-  default     = 4
+  default     = 2
 }
 
 variable "vm_memory_gbs" {
   description = "RAM in GB for the Ampere A1 shape."
   type        = number
   default     = 8
+}
+
+variable "worker_vm_ocpus" {
+  description = "Number of OCPUs for the k3s worker Ampere A1 VM."
+  type        = number
+  default     = 2
+}
+
+variable "worker_vm_memory_gbs" {
+  description = "RAM in GB for the k3s worker VM."
+  type        = number
+  default     = 8
+}
+
+variable "worker_count" {
+  description = "Number of k3s worker VMs to provision."
+  type        = number
+  default     = 2
 }

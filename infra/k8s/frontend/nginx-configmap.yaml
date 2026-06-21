@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-frontend-config
+  namespace: zeropad
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      # Unknown .txt pad paths fall back to _.txt
+      location ~ ^/[^/]+\.txt$ {
+        try_files $uri /_.txt;
+      }
+
+      # All other non-file paths fall back to _.html (SPA-style)
+      location / {
+        try_files $uri $uri/index.html /_.html;
+      }
+    }

@@ -123,11 +123,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ansible and community.docker collection
+      - name: Install Ansible
         run: |
           sudo apt-get update -q
           sudo apt-get install -y ansible
-          ansible-galaxy collection install community.docker
 
       - name: Setup SSH
         run: |
@@ -135,14 +134,16 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/zeropad_deploy_rsa
           chmod 600 ~/.ssh/zeropad_deploy_rsa
           echo "${{ secrets.SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
+          echo "${{ secrets.WORKER_SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Deploy backend and frontend
+      - name: Deploy to k3s cluster
         working-directory: infra/ansible
         env:
           OCI_NAMESPACE: ${{ secrets.OCI_NAMESPACE }}
+          POSTGRES_BACKUP_ACCESS_KEY_ID: ${{ secrets.POSTGRES_BACKUP_ACCESS_KEY_ID }}
+          POSTGRES_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.POSTGRES_BACKUP_SECRET_ACCESS_KEY }}
         run: |
           ansible-playbook playbook.yml \
-            -i "${{ secrets.VM_IP }}," \
-            -e "ansible_user=opc ansible_ssh_private_key_file=~/.ssh/zeropad_deploy_rsa" \
-            --tags backend,frontend \
-            --extra-vars "release_tag=${{ needs.tag.outputs.new_tag }}"
+            -i inventory.ini \
+            --tags deploy \
+            --extra-vars "release_tag=${{ needs.tag.outputs.new_tag }} oci_namespace=$OCI_NAMESPACE postgres_backup_access_key_id=$POSTGRES_BACKUP_ACCESS_KEY_ID postgres_backup_secret_access_key=$POSTGRES_BACKUP_SECRET_ACCESS_KEY"

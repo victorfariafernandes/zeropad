@@ -12,3 +12,9 @@ variable "domain" {
   description = "Apex domain name (e.g. zeropad.dev)."
   type        = string
 }
+
+variable "worker_public_ips" {
+  description = "Public IPs of worker VMs for round-robin DNS."
+  type        = list(string)
+  default     = []
+}

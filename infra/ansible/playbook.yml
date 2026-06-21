@@ -1,25 +1,46 @@
 ---
-- name: Configure zeropad VM
-  hosts: all
+- name: Configure k3s servers
+  hosts: k3s_server
+  become: true
+  vars:
+    block_device: /dev/sdb
+    data_mount: /data
+  roles:
+    - role: volume
+      tags: [volume, k3s]
+    - role: k3s-server
+      tags: [k3s]
+
+- name: Configure k3s agents
+  hosts: k3s_agent
+  become: true
+  vars:
+    k3s_server_host: "{{ hostvars[groups['k3s_server'][0]]['ansible_default_ipv4']['address'] }}"
+  pre_tasks:
+    - name: Ensure worker IP has been configured
+      assert:
+        that: ansible_host != 'WORKER_PUBLIC_IP_PLACEHOLDER'
+        fail_msg: >
+          Worker IP is still the placeholder. Update inventory.ini with the actual
+          IP from: terraform output worker_public_ip
+  roles:
+    - role: k3s-agent
+      tags: [k3s]
+
+- name: Deploy application
+  hosts: k3s_server
   become: true
   vars:
     domain: "zeropad.dev"
     github_owner: "victorfariafernandes"
-    block_device: /dev/sdb
-    data_mount: /data
-    oci_namespace: "{{ lookup('env', 'OCI_NAMESPACE') }}"
-    backend_replicas: 2
-    backend_memory: "256m"
-    backend_memory_reservation: "128m"
-
+  pre_tasks:
+    - name: Ensure worker IP has been configured in inventory
+      assert:
+        that: >
+          hostvars[groups['k3s_agent'][0]]['ansible_host'] != 'WORKER_PUBLIC_IP_PLACEHOLDER'
+        fail_msg: >
+          Worker IP is still the placeholder in inventory.ini. Update it with the
+          actual IP from: terraform output worker_public_ip
   roles:
-    - role: volume
-      tags: volume
-    - role: docker
-      tags: docker
-    - role: backend
-      tags: backend
-    - role: frontend
-      tags: frontend
-    - role: caddy
-      tags: caddy
+    - role: k8s-manifests
+      tags: [deploy]

@@ -87,6 +87,36 @@ resource "oci_core_security_list" "public" {
       code = 4
     }
   }
+
+  # k3s API server
+  ingress_security_rules {
+    protocol = "6"
+    source   = "10.0.0.0/16"
+    tcp_options {
+      min = 6443
+      max = 6443
+    }
+  }
+
+  # Flannel VXLAN (pod-to-pod overlay)
+  ingress_security_rules {
+    protocol = "17"
+    source   = "10.0.0.0/16"
+    udp_options {
+      min = 8472
+      max = 8472
+    }
+  }
+
+  # kubelet API
+  ingress_security_rules {
+    protocol = "6"
+    source   = "10.0.0.0/16"
+    tcp_options {
+      min = 10250
+      max = 10250
+    }
+  }
 }
 
 resource "oci_core_subnet" "public" {

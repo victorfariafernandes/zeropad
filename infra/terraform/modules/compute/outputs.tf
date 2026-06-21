@@ -12,3 +12,13 @@ output "backend_dynamic_group_name" {
   description = "Name of the dynamic group used for Instance Principal auth."
   value       = oci_identity_dynamic_group.backend.name
 }
+
+output "worker_public_ips" {
+  description = "Public IPs of all k3s worker VMs."
+  value       = oci_core_instance.worker[*].public_ip
+}
+
+output "worker_private_ips" {
+  description = "Private IPs of all k3s worker VMs."
+  value       = oci_core_instance.worker[*].private_ip
+}

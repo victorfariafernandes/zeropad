@@ -17,6 +17,17 @@ resource "cloudflare_record" "apex" {
   comment = "Managed by Terraform — zeropad VM"
 }
 
+resource "cloudflare_record" "apex_workers" {
+  count   = length(var.worker_public_ips)
+  zone_id = var.cloudflare_zone_id
+  name    = var.domain
+  type    = "A"
+  content = var.worker_public_ips[count.index]
+  proxied = true
+  ttl     = 1
+  comment = "Managed by Terraform — zeropad worker VM"
+}
+
 resource "cloudflare_record" "api" {
   zone_id = var.cloudflare_zone_id
   name    = "api"
@@ -25,6 +36,17 @@ resource "cloudflare_record" "api" {
   proxied = true
   ttl     = 1
   comment = "Managed by Terraform — zeropad API"
+}
+
+resource "cloudflare_record" "api_workers" {
+  count   = length(var.worker_public_ips)
+  zone_id = var.cloudflare_zone_id
+  name    = "api"
+  type    = "A"
+  content = var.worker_public_ips[count.index]
+  proxied = true
+  ttl     = 1
+  comment = "Managed by Terraform — zeropad API worker"
 }
 
 resource "cloudflare_record" "www" {

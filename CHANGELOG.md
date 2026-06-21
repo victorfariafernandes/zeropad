@@ -18,6 +18,293 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-14 — docs: add required GitHub Actions secrets table to infra/k8s/secrets/README.md
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/k8s/secrets/README.md` (modified)
+
+**What changed:**
+- Added "Required GitHub Actions Secrets" section with a table documenting SSH_PRIVATE_KEY, SSH_KNOWN_HOST, WORKER_SSH_KNOWN_HOST, and OCI_NAMESPACE — including how to obtain each value
+- Added note listing VM_IP as an obsolete secret that can be removed from GitHub settings
+
+**Why:** Code review identified missing secrets documentation as an important gap; operators need to know which GitHub Actions secrets to provision before the deploy workflow can run.
+
+---
+
+## 2026-06-14 — refactor: scalable for_each DNS records for worker VMs
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/terraform/modules/dns/variables.tf` (modified)
+- `infra/terraform/modules/dns/main.tf` (modified)
+- `infra/terraform/main.tf` (modified)
+
+**What changed:**
+- Replaced single `worker_public_ip` string variable with `worker_public_ips` list variable (default `[]`) in the dns module
+- Replaced singular `apex_worker` and `api_worker` cloudflare_record resources with `for_each`-based `apex_workers` and `api_workers` resources that iterate over `var.worker_public_ips`
+- Updated dns module call in root `main.tf` to pass `worker_public_ips = [module.compute.worker_public_ip]`
+
+**Why:** User requested scalable round-robin DNS using the `for_each`/list pattern so additional worker IPs can be added without new resource blocks. `terraform validate` and `go build ./...` both pass.
+
+---
+
+## 2026-06-14 — fix: CI/Ansible code review blockers
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.gitignore` (modified)
+- `infra/ansible/playbook.yml` (modified)
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Removed `infra/ansible/inventory.ini` from `.gitignore` so the file-based inventory is tracked in git (CI references it with `-i inventory.ini`)
+- Added `pre_tasks` guard to the "Deploy application" play in `playbook.yml` asserting the worker IP placeholder has been replaced — fires even when `--tags deploy` skips the k3s_agent play
+- Added `ANSIBLE_HOST_KEY_CHECKING: "False"` env var to the "Deploy to k3s cluster" step in `deploy.yml` to prevent SSH fingerprint mismatches from hanging the deploy
+
+**Why:** Code review identified these as critical blockers: inventory.ini being gitignored breaks CI, the placeholder guard only ran during k3s_agent provisioning (not deploy-only runs), and missing host key checking could cause silent CI hangs.
+
+---
+
+## 2026-06-14 — Phase 4: Update GitHub Actions deploy workflow for k3s
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Removed `ansible-galaxy collection install community.docker` from the Ansible install step (no longer needed)
+- Renamed install step to "Install Ansible"
+- Added `WORKER_SSH_KNOWN_HOST` secret to SSH setup so the agent node host key is trusted
+- Replaced "Deploy backend and frontend" step with "Deploy to k3s cluster" step:
+  - Switched from inline `-i "${{ secrets.VM_IP }},"` inventory to `-i inventory.ini`
+  - Changed `--tags backend,frontend` to `--tags deploy`
+  - Added `oci_namespace=$OCI_NAMESPACE` to `--extra-vars` (required by k8s-manifests role)
+  - Removed `-e "ansible_user=opc ansible_ssh_private_key_file=..."` (now defined in inventory.ini)
+
+**Why:** Phase 4 task — align the CI/CD workflow with the new k3s-based Ansible playbook that uses file-based inventory and k8s deployment tags instead of the old Docker/Ansible approach.
+
+---
+
+## 2026-06-14 — fix: Ansible role hardening — 10 code-quality fixes
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/ansible/playbook.yml` (modified)
+- `infra/ansible/roles/k3s-agent/tasks/main.yml` (modified)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (modified)
+
+**What changed:**
+- [playbook.yml] Added `pre_tasks` assert to the k3s-agent play to fail fast when worker IP is still the placeholder value
+- [k3s-agent] Replaced `hostvars` cross-play token reference with `delegate_to` slurp + set_fact — role now self-sufficient with `--limit k3s_agent`
+- [k3s-agent] Added `wait_for` task to verify k3s API port 6443 is reachable before agent join
+- [k3s-agent] Changed `creates:` guard from `/usr/local/bin/k3s` to `/etc/systemd/system/k3s-agent.service` for correct idempotency
+- [k3s-agent] Changed `--node-name=zeropad-worker` to `--node-name={{ inventory_hostname }}` to support multiple workers
+- [k8s-manifests] Added `rsync` install task as first task so `synchronize` module has its dependency
+- [k8s-manifests] Added `assert` task to validate `release_tag` and `oci_namespace` are defined before applying manifests
+- [k8s-manifests] Replaced `kubectl apply -f backend/` directory apply with individual `deployment.yaml` and `service.yaml` applies to prevent ConfigMap overwrite
+- [k8s-manifests] Added `--force-update` to `helm repo add` for idempotency
+- [k8s-manifests] Added `KUBECONFIG` env var to "Apply namespace", "Create or update backend ConfigMap", and "Create or update frontend release-tag ConfigMap" tasks
+
+**Why:** Code quality review identified 10 critical/important issues in the Ansible roles; all have been resolved.
+
+---
+
+## 2026-06-14 — Phase 3: Refactor Ansible to install k3s and deploy via kubectl/Helm
+
+**Agent:** claude-sonnet-4-6, Phase 3 implementation
+**Files changed:**
+- `infra/ansible/inventory.ini` (modified)
+- `infra/ansible/playbook.yml` (modified)
+- `infra/ansible/roles/k3s-server/tasks/main.yml` (added)
+- `infra/ansible/roles/k3s-agent/tasks/main.yml` (added)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (added)
+- `infra/ansible/roles/docker/` (deleted)
+- `infra/ansible/roles/backend/` (deleted)
+- `infra/ansible/roles/frontend/` (deleted)
+- `infra/ansible/roles/caddy/` (deleted)
+
+**What changed:**
+- Replaced single-host `[zeropad]` inventory group with `[k3s_server]` + `[k3s_agent]` + `[k3s_cluster:children]` two-group structure; worker IP is a placeholder (`WORKER_PUBLIC_IP_PLACEHOLDER`) to be filled from `terraform output worker_public_ip`
+- Replaced single-play Docker-based playbook with three plays: configure k3s servers (runs `volume` + `k3s-server` roles on all `k3s_server` hosts), configure k3s agents (runs `k3s-agent` role on all `k3s_agent` hosts), deploy application (runs `k8s-manifests` role on `k3s_server`)
+- Added `k3s-server` role: disables firewalld, installs k3s server with traefik disabled, waits for API readiness, reads the node join token and exposes it as an Ansible fact (`k3s_node_token`) for cross-play consumption
+- Added `k3s-agent` role: disables firewalld, joins each agent to the cluster using the server's IP and the token propagated via `hostvars`
+- Added `k8s-manifests` role: rsync's `infra/k8s/` to remote, applies namespace, installs Helm + ingress-nginx, creates backend and frontend ConfigMaps, applies all backend/frontend/ingress manifests, patches image tags, waits for rollouts to complete
+- Deleted `docker`, `backend`, `frontend`, and `caddy` roles (replaced by k3s + k8s-manifests approach)
+- `volume` role is unchanged
+
+**Why:** Phase 3 of k3s cluster migration — replace Docker/Caddy-based Ansible deployment with k3s installation and Kubernetes-native deploy using the `infra/k8s/` manifests created in Phase 2.
+
+---
+
+## 2026-06-14 — Phase 2: add infra/k8s/ Kubernetes manifests directory
+
+**Agent:** claude-sonnet-4-6, Phase 2 implementation
+**Files changed:**
+- `infra/k8s/namespace.yaml` (added)
+- `infra/k8s/backend/configmap.yaml` (added)
+- `infra/k8s/backend/deployment.yaml` (added)
+- `infra/k8s/backend/service.yaml` (added)
+- `infra/k8s/frontend/nginx-configmap.yaml` (added)
+- `infra/k8s/frontend/deployment.yaml` (added)
+- `infra/k8s/frontend/service.yaml` (added)
+- `infra/k8s/ingress/ingress-nginx-values.yaml` (added)
+- `infra/k8s/ingress/ingress.yaml` (added)
+- `infra/k8s/secrets/README.md` (added)
+
+**What changed:**
+- Added `zeropad` namespace manifest
+- Added backend ConfigMap, Deployment (2 replicas, readiness probe on `/health`), and ClusterIP Service
+- Added frontend Deployment with alpine init container that fetches the tarball from GitHub Releases, nginx ConfigMap replicating Caddy SPA/txt fallback routing, and ClusterIP Service
+- Added NGINX Ingress Controller Helm values for bare-metal DaemonSet with hostNetwork
+- Added Ingress routing `zeropad.dev` → frontend and `api.zeropad.dev` → backend with Cloudflare origin TLS
+- Added secrets/README.md documenting the one-time `kubectl create secret tls` bootstrap step
+
+**Why:** Greenfield creation of Kubernetes manifests to enable k3s-based deployment, replacing the current Ansible-only VM deployment approach.
+
+---
+
+## 2026-06-14 — fix: add livenessProbe, CPU limit to backend and readinessProbe to frontend k8s manifests
+
+**Agent:** claude-sonnet-4-6, code review fix
+**Files changed:**
+- `infra/k8s/backend/deployment.yaml`
+- `infra/k8s/frontend/deployment.yaml`
+
+**What changed:**
+- Added `livenessProbe` (httpGet `/health:8080`, initialDelay 15s, period 20s, failureThreshold 3) to backend container
+- Added `cpu: "500m"` to backend `resources.limits` (was memory-only)
+- Added `readinessProbe` (httpGet `/:80`, initialDelay 3s, period 5s) to frontend nginx container
+
+**Why:** Code review identified three critical quality issues: missing liveness probe on backend, missing CPU resource limit on backend, and missing readiness probe on frontend nginx container.
+
+---
+
+## 2026-06-14 — Terraform: surface worker_private_ip root output and fix dynamic group description
+
+**Agent:** claude-sonnet-4-6, code review fix
+**Files changed:**
+- `infra/terraform/outputs.tf`
+- `infra/terraform/modules/compute/main.tf`
+
+**What changed:**
+- Added `worker_private_ip` root-level output in `outputs.tf`, surfacing `module.compute.worker_private_ip` for Ansible k3s join configuration
+- Fixed `oci_identity_dynamic_group.backend` `description` field: "VM" → "VMs" (plural, matches the matching rule which covers both instances)
+
+**Why:** Code review identified the root outputs file was missing `worker_private_ip` (needed by Ansible for k3s cluster join) and a minor description typo in the dynamic group resource.
+
+---
+
+## 2026-06-14 — Terraform: add k3s worker node (Node 2) and update networking
+
+**Agent:** claude-sonnet-4-6, Phase 1 Terraform changes
+**Files changed:**
+- `infra/terraform/modules/compute/main.tf`
+- `infra/terraform/modules/compute/variables.tf`
+- `infra/terraform/modules/compute/outputs.tf`
+- `infra/terraform/modules/networking/main.tf`
+- `infra/terraform/main.tf`
+- `infra/terraform/variables.tf`
+- `infra/terraform/outputs.tf`
+
+**What changed:**
+- Added `oci_core_instance.worker` resource (2 OCPU / 12 GB RAM ARM VM) as k3s worker node
+- Updated IAM dynamic group `matching_rule` to include both Node 1 and Node 2 instance IDs
+- Added `worker_vm_ocpus` and `worker_vm_memory_gbs` variables to compute module, root variables, and root module call
+- Added `worker_public_ip` and `worker_private_ip` outputs to compute module
+- Added `worker_public_ip` and `worker_ssh_command` outputs to root outputs
+- Downsized Node 1 defaults: `vm_ocpus` 4→2, `vm_memory_gbs` 8/24→12 (module/root)
+- Added three internal-only ingress security rules to networking: k3s API server (TCP 6443), Flannel VXLAN (UDP 8472), kubelet API (TCP 10250) — all scoped to VCN CIDR 10.0.0.0/16
+
+**Why:** Phase 1 of k3s Kubernetes cluster setup — provision a second OCI ARM VM as a worker node and open the necessary inter-node ports for cluster communication.
+
+---
+
+## 2026-06-14 — Fix /health handler: method guard and error logging
+
+**Agent:** claude-sonnet-4-6, code quality fix
+**Files changed:** `backend/main.go`
+
+**What changed:**
+- Changed `/health` route pattern to `GET /health` (Go 1.22+ method-qualified mux pattern) so non-GET requests automatically receive `405 Method Not Allowed`
+- Assigned the return value of `json.NewEncoder(w).Encode(...)` and logged any error via `log.Printf`, matching the `writeJSON` convention used elsewhere in the codebase
+
+**Why:** Code review identified two issues: silently discarded JSON encode errors and no HTTP method guard on the health endpoint.
+
+---
+
+## 2026-06-14 — Add /health endpoint to Go backend
+
+**Agent:** claude-sonnet-4-6, Phase 0 infra task
+**Files changed:** `backend/main.go`
+
+**What changed:**
+- Added `GET /health` handler on the existing `mux`, wrapped with the `cors` middleware, returning HTTP 200 with `{"status":"ok"}`
+- Added `encoding/json` import to support inline JSON encoding
+
+**Why:** Prerequisite for Kubernetes liveness/readiness probes in the upcoming backend deployment manifest.
+
+---
+
+## 2026-05-23 — Add pad ownership, presentation mode, marketplace, and no-KYC principle to roadmap
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Added "Core principles" section establishing no-KYC and privacy-first as hard constraints
+- Updated Phase 1.1 table list: added `pad_bids`; noted `presentation_mode`, `for_sale`, `min_bid_*` fields in `pad_meta`
+- Added Phase 3.3 Pad claiming — paid user can take ownership of anonymous/free-owned pads
+- Added Phase 3.4 Presentation mode — owner can make a pad publicly readable but not editable
+- Added Phase 3.5 Pad marketplace — paid users can list pads for sale and receive crypto bids; v1 wallet-to-wallet, v2 escrow smart contract
+- Replaced Phase 3.6 Stripe billing with Phase 3.9 crypto-native billing (ETH/USDC/Lightning/Monero, no KYC)
+- Renumbered Phase 3.3–3.6 → 3.6–3.9 to accommodate new sections
+- Fixed Phase 4.1 team invite to use username/wallet instead of email
+- Fixed Phase 5 to remove Stripe and email references
+
+**Why:** User defined no-KYC as a core product principle and requested pad claiming, presentation mode, and a crypto-native pad marketplace.
+
+---
+
+## 2026-05-23 — Update roadmap auth to use random ID and SIWE/SIWX
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Replaced email + password auth in Phase 1.3 with two passwordless methods: random UUID identity and SIWE/SIWX wallet login
+
+**Why:** User wants auth to be passwordless — either a randomly generated ID the user saves, or wallet-based login via SIWE (already implemented for key derivation).
+
+---
+
+## 2026-05-23 — Update roadmap with SQLite-on-Block-Volume storage approach
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (modified)
+
+**What changed:**
+- Rewrote Phase 1 storage section: replaced generic "add a database" with concrete SQLite-on-OCI-Block-Volume plan (Option A)
+- Added full SQLite schema for all tables: `users`, `sessions`, `pad_meta`, `namespaces`, `api_keys`, `api_usage`, `teams`, `team_members`, `audit_log`
+- Added Phase 1.2: OCI Object Storage lifecycle rule for free-tier TTL (tags `tier=free`/`tier=paid` at upload; Oracle handles deletion — no background job)
+- Expanded all phases with concrete implementation details reflecting the OCI + SQLite dual-store architecture
+
+**Why:** User confirmed Option A (SQLite on existing Block Volume + OCI Object Storage for content) as the storage strategy; roadmap updated to reflect the actual infra.
+
+---
+
+## 2026-05-23 — Add freemium monetization roadmap
+
+**Agent:** claude-sonnet-4-6, monetization planning session
+**Files changed:** `docs/roadmap.md` (created)
+
+**What changed:**
+- Added `docs/roadmap.md` — a phased implementation roadmap for Free / Pro / Team freemium tiers
+
+**Why:** User requested a structured roadmap for monetizing dopad with freemium limits across three tiers (Free, Pro at $8/mo, Team at $24/mo), ordered by implementation priority.
+
+---
+
 ## 2026-05-22 — Content type selector (Text, Rich Text, LaTeX, Code)
 
 **Agent:** claude-sonnet-4-6
