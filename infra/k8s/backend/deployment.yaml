@@ -27,6 +27,11 @@ spec:
                 secretKeyRef:
                   name: zeropad-pg-app
                   key: uri
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: JWT_SECRET
           resources:
             requests:
               memory: "128Mi"

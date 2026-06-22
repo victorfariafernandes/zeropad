@@ -118,6 +118,15 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
+- name: Create or update backend secrets
+  shell: >
+    /usr/local/bin/k3s kubectl create secret generic backend-secrets
+    --from-literal=JWT_SECRET={{ jwt_secret }}
+    --namespace=zeropad
+    --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
 - name: Create or update backend ConfigMap
   shell: >
     /usr/local/bin/k3s kubectl create configmap backend-env

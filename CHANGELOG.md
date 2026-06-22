@@ -18,6 +18,36 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-22 — fix: wire JWT_SECRET from GitHub secret to Kubernetes
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (modified)
+- `infra/k8s/backend/deployment.yaml` (modified)
+
+**What changed:**
+- Added `JWT_SECRET` GitHub secret to the deploy workflow env + Ansible extra-vars
+- Added Ansible task to create/update a `backend-secrets` Kubernetes Secret containing `JWT_SECRET`
+- Deployment now mounts `JWT_SECRET` from `backend-secrets` via `secretKeyRef`
+
+**Why:** Backend pod was crashing on startup because `JWT_SECRET` is required but was not provisioned in the cluster, causing the rollout to time out
+
+---
+
+## 2026-06-22 — feat: add Sign in link to homepage
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `frontend/app/page.tsx` (modified)
+
+**What changed:**
+- Added a header bar with a "Sign in" link in the top-right corner of the homepage pointing to `/_/login`
+
+**Why:** User requested a visible entry point to the auth page from the homepage
+
+---
+
 ## 2026-06-21 — feat: signup/login auth with password, SIWE, and passkeys
 
 **Agent:** claude-sonnet-4-6
