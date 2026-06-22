@@ -38,7 +38,6 @@ func NewPadHandler(svc *padsvc.Service) *PadHandler {
 func (h *PadHandler) Register(
 	mux *http.ServeMux,
 	cors func(http.HandlerFunc) http.HandlerFunc,
-	rateLimit func(http.HandlerFunc) http.HandlerFunc,
 	reserved func(http.HandlerFunc) http.HandlerFunc,
 ) {
 	mux.HandleFunc("/pads/", cors(reserved(func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +45,7 @@ func (h *PadHandler) Register(
 		case http.MethodGet:
 			h.HandleGet(w, r)
 		case http.MethodPut:
-			rateLimit(h.HandleSet)(w, r)
+			h.HandleSet(w, r)
 		default:
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		}

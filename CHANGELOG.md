@@ -18,6 +18,43 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-21 — feat: signup/login auth with password, SIWE, and passkeys
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `backend/middlewares/ratelimit.go` (deleted)
+- `backend/adapters/http/pad.go` (modified — removed rateLimit param)
+- `backend/adapters/db/migrations/002_auth.sql` (created)
+- `backend/adapters/db/db.go` (modified — embed + run migration002)
+- `backend/adapters/db/user.go` (created)
+- `backend/services/auth/jwt.go` (created)
+- `backend/services/auth/service.go` (created)
+- `backend/services/auth/passkey.go` (created)
+- `backend/adapters/http/auth.go` (created)
+- `backend/middlewares/session.go` (created)
+- `backend/middlewares/cors.go` (modified — added Authorization + POST)
+- `backend/main.go` (modified — JWT_SECRET, AuthHandler, PasskeyService wiring)
+- `frontend/next.config.ts` (modified — `/_/:path*` → `/system/:path*` rewrite)
+- `infra/k8s/frontend/nginx-configmap.yaml` (modified — `/_/` location block)
+- `frontend/app/_lib/auth.ts` (created)
+- `frontend/app/system/login/page.tsx` (created)
+- `frontend/app/system/login/AuthPageClient.tsx` (created)
+
+**What changed:**
+- Removed rate limiter middleware entirely
+- Added DB migration that adds `username`, `email`, `password_hash`, `wallet_address` columns to `users` table and creates `passkeys` table
+- `services/auth`: JWT issuance/verification (HS256, 30-day TTL), Argon2id password hashing, SIWE signature verification via `spruceid/siwe-go`, passkey service wrapping `go-webauthn/webauthn`
+- `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` HTTP endpoints
+- WebAuthn passkey registration (`/auth/passkey/register/begin|finish`) and login (`/auth/passkey/login/begin|finish`) endpoints
+- `Session` middleware validates JWT from `Authorization: Bearer` header and injects claims into context
+- `/_/login` page with unified sign-in / sign-up tabs, password/wallet/passkey methods
+- Frontend routing: dev rewrite + nginx location block map `/_/` → `/system/` files
+- New env vars required: `JWT_SECRET` (required), `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`, `WEBAUTHN_RP_NAME` (optional, enables passkeys)
+
+**Why:** Add user accounts so pads can be associated with owners; support multiple auth methods matching the pad encryption methods already in the app
+
+---
+
 ## 2026-06-21 — feat: reserved path blocklist for `/_` prefix
 
 **Agent:** claude-sonnet-4-6

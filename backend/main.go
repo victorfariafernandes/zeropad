@@ -12,6 +12,7 @@ import (
 	httpadapter "zeropad-backend/adapters/http"
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/middlewares"
+	authsvc "zeropad-backend/services/auth"
 	padsvc "zeropad-backend/services/pad"
 )
 
@@ -31,13 +32,19 @@ func selectStore() store.PadStore {
 }
 
 func main() {
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	if len(jwtSecret) == 0 {
+		log.Fatal("JWT_SECRET env var is required")
+	}
+
+	var database *db.DB
 	if os.Getenv("POSTGRES_URL") != "" {
-		database, err := db.Init(context.Background())
+		var err error
+		database, err = db.Init(context.Background())
 		if err != nil {
 			log.Fatalf("failed to init database: %v", err)
 		}
 		defer database.Close()
-		log.Printf("connected to PostgreSQL metadata store")
 	}
 
 	padStore := selectStore()
@@ -50,9 +57,32 @@ func main() {
 
 	mux := http.NewServeMux()
 	cors := middlewares.CORS(origin)
-	writeLimiter := middlewares.NewRateLimit(10)
+	session := middlewares.Session(jwtSecret)
 
-	padHandler.Register(mux, cors, writeLimiter, middlewares.Reserved)
+	padHandler.Register(mux, cors, middlewares.Reserved)
+
+	if database != nil {
+		svc := authsvc.NewService(database, jwtSecret)
+
+		var passkey *authsvc.PasskeyService
+		rpID := os.Getenv("WEBAUTHN_RP_ID")
+		rpOrigin := os.Getenv("WEBAUTHN_RP_ORIGIN")
+		rpName := os.Getenv("WEBAUTHN_RP_NAME")
+		if rpID != "" && rpOrigin != "" {
+			if rpName == "" {
+				rpName = "zeropad"
+			}
+			var err error
+			passkey, err = authsvc.NewPasskeyService(rpID, rpOrigin, rpName)
+			if err != nil {
+				log.Fatalf("failed to init passkey service: %v", err)
+			}
+			log.Printf("passkey service enabled rpID=%s", rpID)
+		}
+
+		authHandler := httpadapter.NewAuthHandler(svc, passkey, database, cors, session)
+		authHandler.Register(mux)
+	}
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -13,6 +13,9 @@ import (
 //go:embed migrations/001_users.sql
 var migration001 string
 
+//go:embed migrations/002_auth.sql
+var migration002 string
+
 type DB struct {
 	pool *pgxpool.Pool
 }
@@ -52,6 +55,10 @@ func (d *DB) Close() {
 }
 
 func (d *DB) migrate(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, migration001)
-	return err
+	for _, m := range []string{migration001, migration002} {
+		if _, err := d.pool.Exec(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -10,6 +10,15 @@ data:
       root /usr/share/nginx/html;
       index index.html;
 
+      # System pages served from /system/ directory
+      location ^~ /_/ {
+        rewrite ^/_/(.*)$ /system/$1 last;
+      }
+
+      location /system/ {
+        try_files $uri $uri/index.html =404;
+      }
+
       # Unknown .txt pad paths fall back to _.txt
       location ~ ^/[^/]+\.txt$ {
         try_files $uri /_.txt;
