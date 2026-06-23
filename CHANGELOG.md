@@ -18,6 +18,21 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-23 — fix: CI cache 503 and pad header overlap with UserBubble
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+- `frontend/app/[slug]/PadEditor.tsx` (modified)
+
+**What changed:**
+- Added `ignore-error=true` to `cache-to: type=gha` in the deploy workflow — GitHub's GHA cache service occasionally returns 503 on write; the image push itself succeeds, so a cache write failure should not fail the build
+- Added `pr-14` padding to the pad editor's unlocked and locked header right-side content so the fixed `UserBubble` (w-8 at right-4) doesn't visually overlap the language/content-type selectors
+
+**Why:** CI was failing after a successful image push due to a transient GHA cache 503. Separately, the UserBubble avatar was rendering on top of the pad editor's header controls.
+
+---
+
 ## 2026-06-23 — feat: user avatar bubble and profile page
 
 **Agent:** claude-sonnet-4-6

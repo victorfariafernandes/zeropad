@@ -300,7 +300,7 @@ export function PadEditor({ slug }: { slug: string }) {
           <Link href="/" className="text-sm font-semibold tracking-tight">
             zeropad
           </Link>
-          <span className="font-mono text-sm text-zinc-500">/{slug}</span>
+          <span className="font-mono text-sm text-zinc-500 pr-14">/{slug}</span>
         </header>
         <div className="flex flex-col flex-1 items-center justify-center gap-4 p-8">
           <div className="flex flex-col gap-1 text-center">
@@ -364,7 +364,7 @@ export function PadEditor({ slug }: { slug: string }) {
         <Link href="/" className="text-sm font-semibold tracking-tight">
           zeropad
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 pr-14">
           <span className="font-mono text-sm text-zinc-500">/{slug}</span>
           <span className="text-xs text-zinc-400">
             {saveState === "saving" && "saving…"}
