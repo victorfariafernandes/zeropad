@@ -18,6 +18,19 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-22 — fix: nginx try_files for Next.js static HTML pages
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `infra/k8s/frontend/nginx-configmap.yaml` (modified)
+
+**What changed:**
+- Added `$uri.html` to the `try_files` directive in the `/system/` location block
+
+**Why:** Next.js static export generates `system/login.html` (not `system/login/index.html`), so `/_/login` was returning 404. Adding `$uri.html` lets nginx find the file.
+
+---
+
 ## 2026-06-22 — fix: wire JWT_SECRET from GitHub secret to Kubernetes
 
 **Agent:** claude-sonnet-4-6
