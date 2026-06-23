@@ -59,6 +59,7 @@ func (h *AuthHandler) Register(mux *http.ServeMux) {
 
 	h.handle(mux, "POST /auth/signup", h.handleSignup)
 	h.handle(mux, "POST /auth/login", h.handleLogin)
+	h.handle(mux, "POST /auth/logout", h.session(h.handleLogout))
 	h.handle(mux, "GET /auth/me", h.session(h.handleMe))
 
 	if h.passkey != nil {
@@ -164,6 +165,12 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+}
+
+// ─── Logout ──────────────────────────────────────────────────────────────────
+
+func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // ─── Me ──────────────────────────────────────────────────────────────────────

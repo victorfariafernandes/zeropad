@@ -18,6 +18,30 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-23 — feat: user avatar bubble and profile page
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `backend/adapters/http/auth.go` (modified — added `POST /auth/logout`)
+- `frontend/app/_lib/auth.ts` (modified — added `logout()`)
+- `frontend/app/components/UserBubble.tsx` (created)
+- `frontend/app/layout.tsx` (modified — renders `UserBubble`)
+- `frontend/app/page.tsx` (modified — removed hardcoded header/sign-in link)
+- `frontend/app/system/profile/page.tsx` (created)
+- `frontend/app/system/profile/ProfilePageClient.tsx` (created)
+
+**What changed:**
+- Added `POST /auth/logout` backend endpoint (stateless no-op; hook for future token invalidation)
+- Added `logout()` in `auth.ts` that calls the endpoint and clears `sessionStorage`
+- Created `UserBubble` component (fixed top-right, all pages except `/_/login`): shows "Sign in" link when not logged in, avatar initials circle + dropdown (Profile / Logout) when logged in
+- Rendered `UserBubble` in root layout so it appears on every page
+- Removed the per-page hardcoded "Sign in" header from `app/page.tsx`
+- Created `/_/profile` page with left sidebar (avatar, username, nav: Profile settings / API / Groups / Billing) and blank right content area
+
+**Why:** After auth was implemented, users needed a persistent entry point visible on all pages: a sign-in link when logged out, and an avatar bubble with profile/logout access when logged in.
+
+---
+
 ## 2026-06-22 — fix: wallet auth using eth_personal_sign instead of SIWE
 
 **Agent:** claude-sonnet-4-6

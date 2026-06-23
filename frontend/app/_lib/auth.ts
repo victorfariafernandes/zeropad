@@ -19,6 +19,11 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export async function logout(): Promise<void> {
+  await apiFetch("/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
+  clearSession();
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface User {
