@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { UserBubble } from "@/app/components/UserBubble";
 
 export default function Home() {
   const router = useRouter();
@@ -16,6 +17,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1">
+      <header className="flex items-center justify-end px-4 py-3">
+        <UserBubble />
+      </header>
       <div className="flex flex-col flex-1 items-center justify-center p-8">
         <main className="flex flex-col items-center gap-6 w-full max-w-md">
         <h1 className="text-4xl font-semibold tracking-tight">zeropad</h1>

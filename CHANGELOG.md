@@ -18,6 +18,26 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-23 — fix: UserBubble as flex item instead of fixed overlay
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `frontend/app/components/UserBubble.tsx` (modified)
+- `frontend/app/layout.tsx` (modified)
+- `frontend/app/page.tsx` (modified)
+- `frontend/app/[slug]/PadEditor.tsx` (modified)
+
+**What changed:**
+- Removed `fixed top-4 right-4 z-50` from `UserBubble` — it is now a `relative` inline flex item; dropdown stays `absolute z-50`
+- Removed `UserBubble` from `layout.tsx` (no longer a global overlay)
+- Added `UserBubble` to `app/page.tsx` header as a natural flex child
+- Added `UserBubble` to the right-side control div of `PadEditor.tsx` header (unlocked and locked states)
+- Removed the `pr-14` padding hack that was compensating for the overlay
+
+**Why:** The fixed-positioned bubble was visually floating on top of other header controls instead of coexisting with them in the flex row.
+
+---
+
 ## 2026-06-23 — fix: version tag parsing with leading dot
 
 **Agent:** claude-sonnet-4-6
