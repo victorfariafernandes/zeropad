@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	siwe "github.com/spruceid/siwe-go"
 	"golang.org/x/crypto/argon2"
 
 	"zeropad-backend/adapters/db"
@@ -54,7 +54,7 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (string, error)
 		passwordHash = h
 
 	case req.WalletAddress != "" && req.SIWESignature != "" && req.SIWEMessage != "":
-		addr, err := verifySIWE(req.SIWEMessage, req.SIWESignature)
+		addr, err := verifyPersonalSign(req.SIWEMessage, req.SIWESignature)
 		if err != nil {
 			return "", fmt.Errorf("%w: %v", ErrInvalidCredentials, err)
 		}
@@ -93,7 +93,7 @@ func (s *Service) LoginPassword(ctx context.Context, username, password string) 
 }
 
 func (s *Service) LoginWallet(ctx context.Context, username, walletAddress, signature, message string) (string, error) {
-	addr, err := verifySIWE(message, signature)
+	addr, err := verifyPersonalSign(message, signature)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrInvalidCredentials, err)
 	}
@@ -152,18 +152,31 @@ func verifyPassword(password, encoded string) (bool, error) {
 	return string(computed) == string(storedHash), nil
 }
 
-// ─── SIWE ────────────────────────────────────────────────────────────────────
+// ─── Wallet signature ─────────────────────────────────────────────────────────
 
-func verifySIWE(message, signature string) (string, error) {
-	msg, err := siwe.ParseMessage(message)
+// verifyPersonalSign recovers the Ethereum address from an eth_personal_sign
+// signature (produced by ethers.js signer.signMessage). Returns the lowercase address.
+func verifyPersonalSign(message, signature string) (string, error) {
+	// eth_personal_sign hash: keccak256("\x19Ethereum Signed Message:\n" + len + message)
+	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(message))
+	hash := crypto.Keccak256([]byte(prefix + message))
+
+	sigHex := strings.TrimPrefix(signature, "0x")
+	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
-		return "", fmt.Errorf("parse siwe message: %w", err)
+		return "", fmt.Errorf("decode signature: %w", err)
 	}
-	// Verify returns the recovered ECDSA public key; convert it to an address.
-	pubKey, err := msg.Verify(signature, nil, nil, nil)
+	if len(sigBytes) != 65 {
+		return "", fmt.Errorf("invalid signature length: %d", len(sigBytes))
+	}
+	// ethers uses recovery id 27/28; go-ethereum expects 0/1
+	if sigBytes[64] >= 27 {
+		sigBytes[64] -= 27
+	}
+
+	pubKey, err := crypto.SigToPub(hash, sigBytes)
 	if err != nil {
-		return "", fmt.Errorf("verify signature: %w", err)
+		return "", fmt.Errorf("recover public key: %w", err)
 	}
-	addr := crypto.PubkeyToAddress(*pubKey)
-	return strings.ToLower(addr.Hex()), nil
+	return strings.ToLower(crypto.PubkeyToAddress(*pubKey).Hex()), nil
 }

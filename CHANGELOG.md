@@ -18,6 +18,21 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-22 — fix: wallet auth using eth_personal_sign instead of SIWE
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `backend/services/auth/service.go` (modified)
+- `backend/go.mod`, `backend/go.sum` (modified — removed siwe-go)
+
+**What changed:**
+- Replaced `spruceid/siwe-go` SIWE message parsing with direct `eth_personal_sign` verification using `go-ethereum/crypto`
+- `verifyPersonalSign` computes the EIP-191 personal sign hash and recovers the signer address via `crypto.SigToPub`
+
+**Why:** siwe-go expects a strict EIP-4361 message format; the frontend uses `ethers.signer.signMessage()` which produces a plain personal_sign. The mismatch caused "invalid credentials" on every wallet signup/login.
+
+---
+
 ## 2026-06-22 — fix: CORS preflight 405 on auth routes
 
 **Agent:** claude-sonnet-4-6
