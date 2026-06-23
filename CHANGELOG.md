@@ -18,6 +18,19 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-22 — fix: CORS preflight 405 on auth routes
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `backend/adapters/http/auth.go` (modified)
+
+**What changed:**
+- Added `OPTIONS /auth/` catch-all handler so browser preflight requests reach the CORS middleware instead of getting 405
+
+**Why:** Go ServeMux method-specific patterns (`POST /auth/signup`) don't match OPTIONS requests, causing CORS preflight failures in the browser
+
+---
+
 ## 2026-06-22 — fix: nginx try_files for Next.js static HTML pages
 
 **Agent:** claude-sonnet-4-6

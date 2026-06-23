@@ -55,6 +55,8 @@ func NewAuthHandler(
 }
 
 func (h *AuthHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("OPTIONS /auth/", h.cors(func(w http.ResponseWriter, r *http.Request) {}))
+
 	h.handle(mux, "POST /auth/signup", h.handleSignup)
 	h.handle(mux, "POST /auth/login", h.handleLogin)
 	h.handle(mux, "GET /auth/me", h.session(h.handleMe))
