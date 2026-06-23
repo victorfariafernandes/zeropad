@@ -18,6 +18,20 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-06-23 — fix: version tag parsing with leading dot
+
+**Agent:** claude-sonnet-4-6
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Added `VERSION=${VERSION#.}` after stripping `v` prefix, so legacy `v.1.9` tags are parsed as `1.9` (MAJOR=1, MINOR=9, PATCH=0) instead of producing an empty MAJOR
+- Added `MAJOR=${MAJOR:-0}`, `MINOR=${MINOR:-0}`, `PATCH=${PATCH:-0}` defaults to guard against any empty fields
+
+**Why:** Existing tags used a `v.X.Y` format (empty major), causing every bump to emit `v.X.Z` with a blank major component, making patch bumps look like minor bumps.
+
+---
+
 ## 2026-06-23 — fix: CI cache 503 and pad header overlap with UserBubble
 
 **Agent:** claude-sonnet-4-6

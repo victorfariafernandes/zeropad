@@ -34,9 +34,13 @@ jobs:
         run: |
           LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           VERSION=${LATEST#v}
+          VERSION=${VERSION#.}
           MAJOR=$(echo $VERSION | cut -d. -f1)
           MINOR=$(echo $VERSION | cut -d. -f2)
           PATCH=$(echo $VERSION | cut -d. -f3)
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
 
           case "${{ inputs.version_bump }}" in
             major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
