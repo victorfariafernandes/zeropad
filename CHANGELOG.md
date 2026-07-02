@@ -18,6 +18,19 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-07-02 — fix(deploy): read RESEND_FROM_EMAIL/RESEND_TEMPLATE_ID from Actions vars, not secrets
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `.github/workflows/deploy.yml` (modified)
+
+**What changed:**
+- Changed `RESEND_FROM_EMAIL` and `RESEND_TEMPLATE_ID` in the "Deploy to k3s cluster" step's `env:` block from `${{ secrets.* }}` to `${{ vars.* }}`
+
+**Why:** Production deploy failed — rollout timed out with the new pod crash-looping on `RESEND_API_KEY, RESEND_FROM_EMAIL, and RESEND_TEMPLATE_ID env vars are required`. Root cause: the user had registered `RESEND_FROM_EMAIL`/`RESEND_TEMPLATE_ID` under the Actions **Variables** tab, not **Secrets**, so `secrets.RESEND_FROM_EMAIL`/`secrets.RESEND_TEMPLATE_ID` silently resolved to empty strings (referencing an undefined secret name doesn't error). `RESEND_API_KEY` was correctly registered as a secret and was unaffected.
+
+---
+
 ## 2026-07-02 — feat: profile settings (account name, email, email verification via Resend)
 
 **Agent:** claude-sonnet-5
