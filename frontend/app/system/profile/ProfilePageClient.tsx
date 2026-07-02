@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getMe, type User } from "@/app/_lib/auth";
+import { ProfileSettingsPanel } from "./ProfileSettingsPanel";
 
 type Section = "profile" | "api" | "groups" | "billing";
 
@@ -58,7 +59,11 @@ export function ProfilePageClient() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-8" />
+      <main className="flex-1 p-8">
+        {active === "profile" && (
+          <ProfileSettingsPanel user={user} onUserChange={setUser} />
+        )}
+      </main>
     </div>
   );
 }

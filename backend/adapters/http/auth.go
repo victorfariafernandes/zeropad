@@ -61,6 +61,9 @@ func (h *AuthHandler) Register(mux *http.ServeMux) {
 	h.handle(mux, "POST /auth/login", h.handleLogin)
 	h.handle(mux, "POST /auth/logout", h.session(h.handleLogout))
 	h.handle(mux, "GET /auth/me", h.session(h.handleMe))
+	h.handle(mux, "PUT /auth/me/username", h.session(h.handleUpdateUsername))
+	h.handle(mux, "PUT /auth/me/email", h.session(h.handleUpdateEmail))
+	h.handle(mux, "POST /auth/verify-email", h.handleVerifyEmail)
 
 	if h.passkey != nil {
 		h.handle(mux, "POST /auth/passkey/register/begin", h.session(h.handlePasskeyRegisterBegin))
@@ -185,17 +188,8 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	hasPasskey, _ := h.database.HasPasskey(r.Context(), user.ID)
 
-	resp := map[string]any{
-		"id":          user.ID,
-		"username":    user.Username,
-		"has_passkey": hasPasskey,
-	}
-	if user.Email != "" {
-		resp["email"] = user.Email
-	}
-	if user.WalletAddress != "" {
-		resp["wallet_address"] = user.WalletAddress
-	}
+	resp := meResponse(user, "")
+	resp["has_passkey"] = hasPasskey
 	writeJSON(w, http.StatusOK, resp)
 }
 

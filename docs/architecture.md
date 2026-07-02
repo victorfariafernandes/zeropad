@@ -57,17 +57,30 @@ Directory structure (layered architecture):
 backend/
 ├── main.go                     # Wires layers: adapters → service → HTTP router
 ├── services/
-│   └── pad/
-│       └── service.go          # Business logic: pad get/set, ErrNotFound sentinel
+│   ├── pad/
+│   │   └── service.go          # Business logic: pad get/set, ErrNotFound sentinel
+│   ├── auth/
+│   │   └── service.go          # Signup/login, JWT issuance, profile updates, verification emails
+│   └── email/
+│       ├── sender.go           # Sender interface: SendVerificationEmail(ctx, to, username, verifyURL)
+│       └── resend.go           # Resend implementation (only implementation — no fallback)
 ├── adapters/
 │   ├── http/
-│   │   └── pad.go              # Inward adapter: GET+PUT /pads/{slug} handlers
+│   │   ├── pad.go              # Inward adapter: GET+PUT /pads/{slug} handlers
+│   │   ├── auth.go             # Inward adapter: /auth/signup, /auth/login, /auth/me, passkey routes
+│   │   └── profile.go          # Inward adapter: PUT /auth/me/username, PUT /auth/me/email, POST /auth/verify-email
+│   ├── db/                     # Postgres: users, sessions, passkeys, email verification tokens
 │   └── store/
 │       └── pad.go              # Outward adapter: in-memory PadStore (RWMutex)
 └── middlewares/
     ├── cors.go                 # CORS middleware wrapper (plugged via Register)
+    ├── session.go               # JWT session validation, injects Claims into context
     └── ratelimit.go            # Token-bucket per-IP rate limiter
 ```
+
+### Email sending
+
+Verification emails (on signup with an email, and on email change) go through `services/email.Sender`, an interface with a single method (`SendVerificationEmail(ctx, to, username, verifyURL)`). The only implementation is `ResendSender`, using [Resend](https://resend.com)'s Go SDK and a pre-created template (variables: `username`, `verify_url`). Configured via `RESEND_API_KEY` / `RESEND_FROM_EMAIL` / `RESEND_TEMPLATE_ID` — all required; the backend fails fast at startup if any is missing (once `POSTGRES_URL` is set and the auth subsystem is enabled). There is no no-op/fallback sender.
 
 Layer responsibilities:
 - **Services** — pure business logic, no HTTP or storage details

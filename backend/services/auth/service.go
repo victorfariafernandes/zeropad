@@ -7,24 +7,31 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/argon2"
 
 	"zeropad-backend/adapters/db"
+	"zeropad-backend/services/email"
 )
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 var ErrUserNotFound = errors.New("user not found")
 
+const emailVerificationTTL = 24 * time.Hour
+
 type Service struct {
-	db     *db.DB
-	secret []byte
+	db              *db.DB
+	secret          []byte
+	mailer          email.Sender
+	frontendBaseURL string
 }
 
-func NewService(database *db.DB, jwtSecret []byte) *Service {
-	return &Service{db: database, secret: jwtSecret}
+func NewService(database *db.DB, jwtSecret []byte, mailer email.Sender, frontendBaseURL string) *Service {
+	return &Service{db: database, secret: jwtSecret, mailer: mailer, frontendBaseURL: frontendBaseURL}
 }
 
 func (s *Service) Secret() []byte { return s.secret }
@@ -71,7 +78,78 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (string, error)
 	if err != nil {
 		return "", err // db layer returns typed errors (ErrDuplicateUsername etc.)
 	}
+	if user.Email != "" {
+		s.sendVerificationEmail(ctx, user.ID, user.Username, user.Email)
+	}
 	return IssueToken(s.secret, user)
+}
+
+// UpdateUsername renames the user and returns a freshly minted token
+// reflecting the new username, since old tokens' claims.Username is now
+// stale (JWT claims and login lookups are keyed by username).
+func (s *Service) UpdateUsername(ctx context.Context, userID, newUsername string) (db.User, string, error) {
+	if newUsername == "" {
+		return db.User{}, "", fmt.Errorf("username is required")
+	}
+	if err := s.db.UpdateUsername(ctx, userID, newUsername); err != nil {
+		return db.User{}, "", err
+	}
+	user, ok, err := s.db.GetUserByID(ctx, userID)
+	if err != nil {
+		return db.User{}, "", err
+	}
+	if !ok {
+		return db.User{}, "", ErrUserNotFound
+	}
+	token, err := IssueToken(s.secret, user)
+	if err != nil {
+		return db.User{}, "", err
+	}
+	return user, token, nil
+}
+
+// UpdateEmail sets a new email, resets verification, and fires a
+// verification email if the new email is non-empty.
+func (s *Service) UpdateEmail(ctx context.Context, userID, newEmail string) (db.User, error) {
+	if err := s.db.UpdateEmail(ctx, userID, newEmail); err != nil {
+		return db.User{}, err
+	}
+	user, ok, err := s.db.GetUserByID(ctx, userID)
+	if err != nil {
+		return db.User{}, err
+	}
+	if !ok {
+		return db.User{}, ErrUserNotFound
+	}
+	if newEmail != "" {
+		s.sendVerificationEmail(ctx, user.ID, user.Username, newEmail)
+	}
+	return user, nil
+}
+
+// VerifyEmail consumes a verification token.
+func (s *Service) VerifyEmail(ctx context.Context, token string) error {
+	_, err := s.db.VerifyEmailToken(ctx, token)
+	return err
+}
+
+// sendVerificationEmail issues a token and sends the verification email in
+// a detached goroutine (not tied to the caller's request context, which
+// will be canceled by the time the HTTP handler returns).
+func (s *Service) sendVerificationEmail(ctx context.Context, userID, username, emailAddr string) {
+	token, err := s.db.CreateEmailVerificationToken(ctx, userID, emailAddr, emailVerificationTTL)
+	if err != nil {
+		log.Printf("create verification token: %v", err)
+		return
+	}
+	verifyURL := fmt.Sprintf("%s/_/verify-email?token=%s", s.frontendBaseURL, token)
+	go func() {
+		sendCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.mailer.SendVerificationEmail(sendCtx, emailAddr, username, verifyURL); err != nil {
+			log.Printf("send verification email: %v", err)
+		}
+	}()
 }
 
 func (s *Service) LoginPassword(ctx context.Context, username, password string) (string, error) {
@@ -116,10 +194,10 @@ func (s *Service) LoginWallet(ctx context.Context, username, walletAddress, sign
 
 // ─── Argon2id ────────────────────────────────────────────────────────────────
 
-const argonTime    = 3
-const argonMemory  = 64 * 1024
+const argonTime = 3
+const argonMemory = 64 * 1024
 const argonThreads = 4
-const argonKeyLen  = 32
+const argonKeyLen = 32
 
 func hashPassword(password string) (string, error) {
 	salt := make([]byte, 16)

@@ -1,14 +1,24 @@
 # dopad — Monetization Roadmap
 
-Target: freemium model with **Free**, **Pro** ($8/mo), and **Team** ($24/mo) tiers.
+Target: freemium model with **Free** and **Paid** tiers. Paid users subscribe via crypto — no KYC, no email, no card.
 
-## Storage architecture
-
-Pad content stays in **OCI Object Storage** (current setup, unchanged). All metadata — users, sessions, ownership, TTL index, API usage — lives in a **SQLite database on the existing OCI Block Volume** (`zeropad-data`). No new services or infrastructure needed.
+## Data model
 
 ```
-OCI Object Storage   → pad content blobs (JSON per slug, unchanged)
-Block Volume/SQLite  → users, sessions, pad metadata, API usage, teams
+Account ─1:1─ Subscription ──► Billing
+        ─0:N─ API Keys
+        ─1:N─ User ──► Roles ──► ACL ──► Pads ──► Backup Config
+
+Pad Bucket (OCI Object Storage, per slug):
+  - content   (text blob, as today)
+  - files     (binary uploads, new)
+```
+
+```
+OCI Object Storage  → Pad Bucket per slug: content + files
+Block Volume/SQLite → accounts, users, sessions, roles, acl, pad_meta,
+                      api_keys, api_usage, namespaces, backup_configs,
+                      audit_log, pad_bids
 ```
 
 SQLite runs in WAL mode on the already-provisioned block volume. Migrating to PostgreSQL later is a one-adapter swap (`adapters/store/`) when scale demands it.
@@ -34,14 +44,25 @@ These are infrastructure and backend items that must exist before any tier gate 
 - Mount the OCI Block Volume at `/data` via Ansible (add to `roles/volume/tasks/main.yml`)
 - Open SQLite DB at `/data/dopad.db` with WAL mode (`PRAGMA journal_mode=WAL`)
 - New `adapters/store/sqlite.go` implementing a `MetaStore` interface alongside the existing `OCIPadStore`
-- Tables: `users`, `sessions`, `pad_meta`, `namespaces`, `api_keys`, `api_usage`, `teams`, `team_members`, `audit_log`, `pad_bids`
-- `pad_meta` includes: `presentation_mode` (bool), `for_sale` (bool), `min_bid_amount`, `min_bid_currency` — needed for Phase 3 ownership features
+- Tables:
+  - `accounts` — top-level entity; owns subscription, API keys, and users
+  - `users` — belongs to an account; holds auth credentials
+  - `sessions` — active session tokens
+  - `roles` — named roles per account (e.g. admin, editor, viewer)
+  - `acl` — `(account_id, user_id, role_id, slug)` grants; controls pad access
+  - `pad_meta` — slug metadata: `owner_id`, `expires_at`, `presentation_mode`, `for_sale`, `min_bid_amount`, `min_bid_currency`
+  - `namespaces` — reserved namespace → account mapping
+  - `api_keys` — `sha256(key)` stored; linked to account
+  - `api_usage` — per-account request counts per billing period
+  - `backup_configs` — `(slug, provider, credentials_encrypted, enabled)` — per-pad backup destination
+  - `audit_log` — access events for paid pads
+  - `pad_bids` — marketplace bid records
 
 ### 1.2 OCI Object Storage lifecycle rule for TTL
 
 - Add an OCI lifecycle policy in Terraform (`modules/storage/main.tf`) that auto-deletes objects tagged `tier=free` after 7 days
 - On `PUT /pads/{slug}` for anonymous/free users, set the OCI object tag `tier=free` at upload time
-- Pro/Team pads are tagged `tier=paid` and never auto-deleted by the rule
+- Paid pads are tagged `tier=paid` and never auto-deleted by the rule
 - This handles most TTL cleanup without a background job; `pad_meta.expires_at` stays as a fallback index for UI queries
 
 ### 1.3 User accounts
@@ -49,38 +70,33 @@ These are infrastructure and backend items that must exist before any tier gate 
 Two supported auth methods — users can use either or link both to the same account:
 
 **Random ID (passwordless)**
-- `POST /auth/register` — client submits a chosen username; server generates a random UUID as the user identity, creates a `users` row, returns a session token and the UUID
+- `POST /auth/register` — client submits a chosen username; server generates a random UUID as the user identity, creates an `accounts` row and a linked `users` row, returns a session token and the UUID
 - Username must be unique; UUID is the login credential — no password, no email
-- User is responsible for saving the UUID; losing it means losing account access — passkey can be added as a recovery method (see below)
 - `POST /auth/login` — submit the UUID, receive a new session token
-- Good for anonymous-but-persistent accounts; zero friction
 
 **Passkey (WebAuthn)**
-- `POST /auth/passkey/register/begin` + `/finish` — standard WebAuthn registration ceremony; stores the credential public key in a `passkeys` table linked to the `users` row
-- `POST /auth/passkey/login/begin` + `/finish` — WebAuthn assertion; backend verifies the signature, returns a session token
-- Can be used as the primary login method or added to an existing random-ID account as a recovery path
-- Backend: use a WebAuthn Go library (e.g. `go-webauthn/webauthn`) for the ceremony logic
-- Frontend: `navigator.credentials.create` / `navigator.credentials.get` via the WebAuthn browser API; no extra dependencies needed
+- `POST /auth/passkey/register/begin` + `/finish` — WebAuthn registration; stores credential public key in a `passkeys` table linked to the `users` row
+- `POST /auth/passkey/login/begin` + `/finish` — WebAuthn assertion; returns a session token
+- Can be used as primary login or added to an existing account as a recovery path
 
 **SIWE / SIWX (wallet login)**
-- `POST /auth/wallet` — client submits a signed SIWE message; backend verifies the signature, derives the user identity from the wallet address, creates or resumes a `users` row, returns a session token
-- Wallet address serves as the unique identifier — no password or email needed
+- `POST /auth/wallet` — client submits a signed SIWE message; backend verifies the signature, derives user identity from wallet address, creates or resumes an `accounts`/`users` row, returns a session token
 - Aligns with the existing SIWE `KeyDeriver` already in the codebase
 
 **Shared**
 - `POST /auth/logout` — delete the `sessions` row
-- Session token sent as `Authorization: Bearer <token>`; backend middleware resolves it to a `users` row
+- Session token sent as `Authorization: Bearer <token>`; backend middleware resolves it to a `users` row and its parent `accounts` row
 - Frontend: "Connect wallet" or "Generate my ID" options on the account page; token stored in `sessionStorage["session_token"]` (existing convention)
 
 ### 1.4 Pad ownership
 
-- On `PUT /pads/{slug}`, if request is authenticated, upsert a row in `pad_meta` with `owner_id`
+- On `PUT /pads/{slug}`, if request is authenticated, upsert a row in `pad_meta` with `owner_id` (user) and `account_id`
 - Anonymous pads: `owner_id = NULL`, always subject to free-tier limits
-- `GET /pads` (new endpoint) — returns pads owned by the authenticated user
+- `GET /pads` (new endpoint) — returns pads owned by the authenticated account
 
 ### 1.5 Tier enforcement middleware
 
-- Go middleware reads `Authorization` header, validates session, attaches `user` + `tier` to request context
+- Go middleware reads `Authorization` header, validates session, attaches `user` + `account` + `tier` to request context
 - Single `tierLimits(tier)` function returns a struct: `{ MaxSizeBytes, TTLDays, AllowCustomPaths, AllowWallet, APIQuota }`
 - All limit checks go through this one function — no scattered constants
 
@@ -95,7 +111,7 @@ Implement the constraints that define the free experience.
 - Tag OCI objects at upload (Phase 1.2 lifecycle rule handles deletion)
 - Write `expires_at = now() + 7 days` to `pad_meta` for anonymous/free users
 - `GET /pads/{slug}` returns `expires_at` in the response; frontend shows an expiry countdown
-- Upsell prompt: "This pad expires in X days — upgrade to Pro for permanent pads"
+- Upsell prompt: "This pad expires in X days — upgrade to keep it permanently"
 
 ### 2.2 Content size cap (100 KB)
 
@@ -106,125 +122,105 @@ Implement the constraints that define the free experience.
 ### 2.3 Key derivation method restriction
 
 - Free tier: password-based derivation only
-- SIWE wallet deriver and future OAuth derivers gated behind Pro+
-- Frontend: non-password methods show a locked state with a "Pro" badge
+- SIWE wallet deriver and future OAuth derivers gated behind paid tier
+- Frontend: non-password methods show a locked state with a "Paid" badge
 
-### 2.4 Write-token protected pads — Pro only
+### 2.4 Write-token protected pads — Paid only
 
-- The encrypt form (which creates a write-token-protected pad) requires an authenticated Pro+ account
+- The encrypt form (which creates a write-token-protected pad) requires an authenticated paid account
 - Unencrypted public pads remain free and anonymous, no change to existing behavior
 
 ---
 
-## Phase 3 — Pro Tier Features ($8/mo)
+## Phase 3 — Paid Tier Features
 
 ### 3.1 Permanent pads
 
-- Pro users: `expires_at = NULL` in `pad_meta`; OCI object tagged `tier=paid` (excluded from lifecycle deletion)
+- Paid users: `expires_at = NULL` in `pad_meta`; OCI object tagged `tier=paid` (excluded from lifecycle deletion)
 - Backend enforces based on resolved `tier` from middleware context
 
-### 3.2 Larger size cap (10 MB)
+### 3.2 File uploads (up to 200 MB)
 
-- `tierLimits("pro").MaxSizeBytes = 10_485_760`; same middleware check as Phase 2.2
+- `PUT /pads/{slug}/files/{filename}` — uploads a binary file into the Pad Bucket under a `files/` prefix in OCI
+- `GET /pads/{slug}/files` — lists files attached to a pad
+- `GET /pads/{slug}/files/{filename}` — retrieves a file
+- `DELETE /pads/{slug}/files/{filename}` — removes a file
+- Backend: use `io.LimitReader` to enforce the 200 MB cap without buffering in memory
+- Return `413` with `{ "error": "file_size_limit", "limit_bytes": 209715200 }` if exceeded
+- Frontend: file attachment panel in the pad editor; drag-and-drop upload
 
-### 3.3 Pad claiming
+### 3.3 Audio upload
 
-- A paid user can claim any pad where `owner_id = NULL` (anonymous) or `owner.tier = 'free'`
-- `POST /pads/{slug}/claim` — sets `pad_meta.owner_id` to the claiming user; previous owner (if any) loses write access
-- Once a paid user owns a pad, it cannot be claimed — it can only be acquired via a bid (see 3.5)
-- Frontend: "Claim this pad" button shown to authenticated Pro+ users on claimable pads
+- Same file upload mechanism as 3.2; server validates MIME type is `audio/*`
+- Frontend: audio player rendered inline when a pad has an attached audio file
+- Rejected with `415 Unsupported Media Type` if MIME is not audio
 
-### 3.4 Presentation mode
+### 3.4 ACL + Roles (zero-trust sharing)
 
-- Owner toggles via `PUT /pads/{slug}/settings { presentation_mode: true }`
-- In presentation mode: `GET /pads/{slug}` returns full content without requiring a write token (publicly readable); `PUT /pads/{slug}` is rejected with `403` for anyone who is not the owner
-- OCI object tagged accordingly for cache-control purposes
-- Frontend: read-only view with no editor, no autosave, no encrypt form; owner sees a toggle in pad settings
+- Account owner can define roles (admin, editor, viewer) via `POST /accounts/{id}/roles`
+- Grant a role on a pad: `POST /pads/{slug}/acl { user_id, role_id }` — inserts into `acl`
+- Revoke: `DELETE /pads/{slug}/acl/{user_id}`
+- `GET /pads/{slug}` checks `acl` for the requesting user; returns `403` if no grant and pad is private
+- Zero-trust: each grantee receives a per-user read token derived from the pad key — the server never holds the decryption key
+- Frontend: sharing panel on the pad settings page; shows current grantees and their roles
 
-### 3.5 Pad marketplace & bidding
+### 3.5 Backup config
 
-**Listing a pad for sale**
-- Owner calls `PUT /pads/{slug}/settings { for_sale: true, min_bid_amount: "50", min_bid_currency: "USDC" }`
-- Pad remains fully functional while listed
+- `PUT /pads/{slug}/backup { provider: "s3"|"gdrive"|"dropbox", credentials_encrypted, enabled }` — stores config in `backup_configs`; credentials are encrypted client-side before sending
+- A Go background job runs on a schedule (e.g. hourly), reads `backup_configs` where `enabled = true`, and pushes the current pad content + files to the configured destination
+- Frontend: backup settings panel in pad settings; shows last backup time and status
 
-**Placing a bid**
-- Any paid user calls `POST /pads/{slug}/bids { amount, currency, bidder_wallet }` — inserts a row into `pad_bids`
-- `pad_bids` fields: `id`, `slug`, `bidder_id`, `amount`, `currency`, `status` (`pending` | `accepted` | `rejected`), `created_at`
+### 3.6 API for CRUD pads
 
-**Settling a bid**
-- Owner accepts: `POST /pads/{slug}/bids/{bid_id}/accept` — transfers `pad_meta.owner_id` to the bidder
-- v1: wallet-to-wallet payment; owner's wallet address is shown to the bidder, owner confirms receipt before accepting — trust-based, no intermediary
-- v2: ETH/ERC-20 escrow smart contract — bidder funds escrow on-chain, acceptance triggers ownership transfer; no fiat, no KYC at any step
-
-### 3.6 Custom pad paths / namespaces
-
-- `PUT /namespaces/{namespace}` — reserve a namespace for the authenticated Pro user; 409 if taken; insert into `namespaces`
-- Pads at `dopad.io/{namespace}/{slug}` are routed to the owning user's quota and limits
-- Frontend: namespace management page in account settings
-
-### 3.7 SIWE wallet key derivation (unlocked)
-
-- Already implemented in the codebase — remove the free-tier gate added in Phase 2.3
-
-### 3.8 API access (1k req/month)
-
+- `POST /api/pads/{slug}` — create or overwrite pad content (write token required for encrypted pads)
+- `GET /api/pads/{slug}` — read pad content
+- `DELETE /api/pads/{slug}` — delete pad (owner only)
+- All endpoints authenticated via `Authorization: Bearer <api-key>`; API key must belong to a paid account
+- On each request: `UPSERT api_usage ... request_count + 1`; return `429` with `X-RateLimit-Remaining` and `X-RateLimit-Reset` when quota exceeded
 - `POST /api-keys` — generate a random 32-byte key, store `sha256(key)` in `api_keys`, return raw key once
-- Requests authenticated via `Authorization: Bearer <api-key>` resolve to the owning user
-- On each authenticated API request, `UPSERT api_usage ... request_count + 1`
-- Return `429` with `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers when quota exceeded
 
-### 3.9 Billing integration (crypto, no KYC)
+### 3.7 Multiple pads per URL
 
-- `POST /billing/subscribe` — backend returns a payment address and expected amount for the chosen currency (ETH, USDC, Lightning invoice, or Monero address)
-- A Go background watcher polls the chain / Lightning node for incoming payments; on confirmation, sets `users.tier` and `users.tier_expires_at`
+- A single slug can hold multiple named pads: `/{slug}/pads/{name}` routes to a specific named slot in the Pad Bucket
+- `GET/PUT /pads/{slug}/pads/{name}` — read/write a named pad within the slug's bucket
+- `GET /pads/{slug}/pads` — list all named pads under a slug
+- Default (unnamed) pad at `/{slug}` continues to work unchanged
+- Frontend: tab or sidebar to switch between named pads within a slug
+
+### 3.8 Billing integration (crypto, no KYC)
+
+- `POST /billing/subscribe` — backend returns a payment address and expected amount for the chosen currency (ETH, USDC, Lightning invoice, or Monero address); linked to `accounts.id`
+- A Go background watcher polls the chain / Lightning node for incoming payments; on confirmation, sets `accounts.tier` and `accounts.tier_expires_at`
 - v1 simplification: payment address shown to user, admin manually confirms and flips tier; automate chain polling in v2
 - No third-party webhooks, no identity verification, no stored card data
 - Frontend: pricing page with crypto payment instructions, upgrade CTAs throughout the app
 
-> **Ship 3.9 immediately after Phase 2.** You do not need all Pro features before charging — start collecting revenue while the rest builds out.
+> **Ship 3.8 immediately after Phase 2.** You do not need all paid features before charging — start collecting revenue while the rest builds out.
+
+### 3.9 Pad claiming and marketplace
+
+- A paid user can claim any pad where `owner_id = NULL` (anonymous)
+- `POST /pads/{slug}/claim` — sets `pad_meta.owner_id` to the claiming user
+- **Listing a pad for sale**: `PUT /pads/{slug}/settings { for_sale: true, min_bid_amount, min_bid_currency }`
+- **Placing a bid**: `POST /pads/{slug}/bids { amount, currency, bidder_wallet }` — inserts into `pad_bids`
+- **Settling**: owner accepts via `POST /pads/{slug}/bids/{bid_id}/accept`; transfers ownership; v1 trust-based, v2 on-chain escrow
 
 ---
 
-## Phase 4 — Team Tier Features ($24/mo flat, up to 5 seats)
+## Phase 4 — MCP Server
 
-### 4.1 Team workspaces
+Expose pad operations to agentic clients via the Model Context Protocol.
 
-- `POST /teams` — create team, claim team slug, set owner; insert into `teams` + `team_members`
-- `POST /teams/{id}/invite` — invite by username or wallet address; generates a one-time invite link; on accept, insert `team_members` row (no email required)
-- Pads owned by a team (`team_id` set in `pad_meta`) are readable/writable by all members
-
-### 4.2 Reserved namespace for team
-
-- On team creation, reserve `dopad.io/{team-slug}/` namespace automatically (insert into `namespaces` with `team_id`)
-- Shown in team settings; cannot be claimed by other users
-
-### 4.3 OAuth key derivation (Google / Microsoft)
-
-- Implement `GoogleKeyDeriver` and `MicrosoftKeyDeriver` in `frontend/app/_lib/crypto.ts` (same `KeyDeriver` interface)
-- Key material derived from OAuth ID token — deterministic per (slug, user identity), same derivation pattern as SIWE
-- Backend: `POST /auth/oauth/{provider}` to exchange code for a session; create or link `users` row by email
-- Only shown to Team tier accounts in the key method picker
-
-### 4.4 Larger size cap (100 MB)
-
-- `tierLimits("team").MaxSizeBytes = 104_857_600`
-- Use streaming body reading (`io.LimitReader`) on the backend to avoid buffering 100 MB in memory before rejecting
-
-### 4.5 API access (20k req/month)
-
-- Same mechanism as Phase 3.5; `tierLimits("team").APIQuota = 20_000`
-
-### 4.6 LLM file analysis
-
-- "Analyze with AI" button on Team pads
-- Content is decrypted client-side (already in browser), then sent directly from the browser to an LLM API (e.g. OpenAI or Anthropic) — never routed through dopad's server, preserving the zero-trust model
-- Frontend: analysis panel with summary / Q&A UI; user provides their own API key in team settings
-
-### 4.7 Audit log
-
-- Backend writes to `audit_log` table on every `GET`/`PUT` for team-owned pads
-- `GET /teams/{id}/audit-log?page=&limit=` — paginated, newest first
-- Frontend: audit log view in team settings
+- Implement an MCP server in Go (or as a sidecar) that wraps the existing API
+- Tools exposed:
+  - `read_pad(slug, name?)` — read pad content
+  - `write_pad(slug, name?, content)` — write pad content
+  - `list_pads(account_id)` — list pads owned by account
+  - `upload_file(slug, filename, data)` — attach a file to a pad
+  - `list_files(slug)` — list files attached to a pad
+- Auth: API key from Phase 3.6 (`Authorization: Bearer <api-key>`)
+- Each MCP tool maps 1:1 to an existing API endpoint — no new business logic in the MCP layer
+- Frontend: "MCP endpoint" shown in account settings with connection instructions
 
 ---
 
@@ -232,10 +228,10 @@ Implement the constraints that define the free experience.
 
 Nice-to-haves once the core monetization loop is working.
 
-- **Annual billing** — 20% discount; generate annual payment addresses alongside monthly options
-- **Usage dashboard** — API usage, pad count, storage used vs. tier limit
+- **Usage dashboard** — API usage, pad count, storage used, file upload quota; scoped per Account
 - **Expiry notifications** — in-app countdown shown on pad page for free users; no email (no email collected)
 - **Upgrade prompts** — contextual, non-intrusive; triggered on 413, TTL warnings, locked feature clicks
+- **Audit log UI** — `GET /accounts/{id}/audit-log?page=&limit=`; paginated newest-first; shown in account settings
 - **SQLite → PostgreSQL migration** — when write concurrency becomes a bottleneck; adapter swap in `adapters/store/`
 - **Self-hosting license** — commercial license for on-prem deployments; gated behind a license key verified at startup
 
@@ -244,15 +240,15 @@ Nice-to-haves once the core monetization loop is working.
 ## Implementation order summary
 
 ```
-Phase 1 (SQLite + OCI lifecycle + auth)
+Phase 1 (foundation: accounts, roles, ACL schema, auth)
         │
 Phase 2 (free tier gates)
         │
-Phase 3.9 (crypto billing)  ← start collecting revenue here
+Phase 3.8 (billing) ← start collecting revenue here
         │
-Phase 3.1–3.8 (Pro features)
+Phase 3.1–3.7, 3.9 (paid features: files, audio, ACL, backup, API, multi-pad, marketplace)
         │
-Phase 4 (Team features)
+Phase 4 (MCP server)
         │
 Phase 5 (growth & polish)
 ```

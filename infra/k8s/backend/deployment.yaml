@@ -32,6 +32,11 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: JWT_SECRET
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: RESEND_API_KEY
           resources:
             requests:
               memory: "128Mi"

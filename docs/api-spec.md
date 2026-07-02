@@ -118,3 +118,88 @@ For encrypted pads (key change — re-encryption with a new key):
 ```json
 { "error": "rate limit exceeded" }
 ```
+
+---
+
+## Authentication
+
+The following endpoints are documented as of the profile-settings feature; other pre-existing `/auth/*` endpoints (signup, login, logout, passkey) are not yet documented here.
+
+### `GET /auth/me`
+
+Returns the authenticated user. Requires `Authorization: Bearer <session_token>`.
+
+**Response 200:**
+```json
+{ "id": "...", "username": "my-page", "email": "me@example.com", "email_verified": false, "wallet_address": "0x...", "has_passkey": false }
+```
+`email` and `wallet_address` are omitted when unset. `email_verified` is always present.
+
+**Response 401:**
+```json
+{ "error": "missing or invalid token" }
+```
+
+### `PUT /auth/me/username`
+
+Renames the authenticated user's account name (login `username`). Requires `Authorization: Bearer <session_token>`.
+
+**Body:**
+```json
+{ "username": "new-name" }
+```
+
+**Response 200** — same shape as `GET /auth/me`, plus a fresh session token (the old token's claims reference the previous username and stop resolving):
+```json
+{ "id": "...", "username": "new-name", "email_verified": false, "has_passkey": false, "token": "<new session token>" }
+```
+
+**Response 400:**
+```json
+{ "error": "username is required" }
+```
+
+**Response 409:**
+```json
+{ "error": "username already taken" }
+```
+
+### `PUT /auth/me/email`
+
+Sets the authenticated user's email. Resets `email_verified` to `false` and triggers a new verification email. Requires `Authorization: Bearer <session_token>`.
+
+**Body:**
+```json
+{ "email": "me@example.com" }
+```
+`email` may be an empty string to clear it — no email is a valid state.
+
+**Response 200** — same shape as `GET /auth/me`:
+```json
+{ "id": "...", "username": "my-page", "email": "me@example.com", "email_verified": false, "has_passkey": false }
+```
+
+**Response 409:**
+```json
+{ "error": "email already registered" }
+```
+
+### `POST /auth/verify-email`
+
+Consumes a one-time email verification token (sent via the link in the verification email). Unauthenticated — the link may be opened on a different device/session than the one that requested it.
+
+**Body:**
+```json
+{ "token": "<token from the verification email link>" }
+```
+
+**Response 200:**
+```json
+{ "ok": true }
+```
+
+**Response 400:**
+```json
+{ "error": "token is required" }
+{ "error": "invalid or expired token" }
+```

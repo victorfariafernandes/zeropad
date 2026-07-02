@@ -122,6 +122,7 @@
   shell: >
     /usr/local/bin/k3s kubectl create secret generic backend-secrets
     --from-literal=JWT_SECRET={{ jwt_secret }}
+    --from-literal=RESEND_API_KEY={{ resend_api_key }}
     --namespace=zeropad
     --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
   environment:
@@ -133,6 +134,8 @@
     --from-literal=ALLOW_ORIGIN=https://{{ domain }}
     --from-literal=OCI_BUCKET_NAME=zeropad-pads
     --from-literal=OCI_NAMESPACE={{ oci_namespace }}
+    --from-literal=RESEND_FROM_EMAIL={{ resend_from_email }}
+    --from-literal=RESEND_TEMPLATE_ID={{ resend_template_id }}
     --namespace=zeropad
     --dry-run=client -o yaml | /usr/local/bin/k3s kubectl apply -f -
   environment:

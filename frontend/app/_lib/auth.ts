@@ -30,6 +30,7 @@ export interface User {
   id: string;
   username: string;
   email?: string;
+  email_verified: boolean;
   wallet_address?: string;
   has_passkey: boolean;
 }
@@ -105,6 +106,46 @@ export async function getMe(): Promise<User | null> {
   const res = await apiFetch("/auth/me", { headers: authHeaders() });
   if (!res.ok) return null;
   return res.json();
+}
+
+export async function updateUsername(username: string): Promise<User & { token: string }> {
+  const res = await apiFetch("/auth/me/username", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ username }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `update username failed: ${res.status}`);
+  }
+  const data = await res.json();
+  saveSession(data.token);
+  return data;
+}
+
+export async function updateEmail(email: string): Promise<User> {
+  const res = await apiFetch("/auth/me/email", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `update email failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const res = await apiFetch("/auth/verify-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "verification failed");
+  }
 }
 
 export async function passkeyRegisterBegin(): Promise<unknown> {

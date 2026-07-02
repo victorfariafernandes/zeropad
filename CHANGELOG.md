@@ -18,6 +18,48 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-07-02 — feat: profile settings (account name, email, email verification via Resend)
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `backend/adapters/db/migrations/003_email_verification.sql` (added)
+- `backend/adapters/db/db.go` (modified)
+- `backend/adapters/db/user.go` (modified)
+- `backend/services/email/sender.go` (added)
+- `backend/services/email/resend.go` (added)
+- `backend/services/auth/service.go` (modified)
+- `backend/adapters/http/auth.go` (modified)
+- `backend/adapters/http/profile.go` (added)
+- `backend/main.go` (modified)
+- `backend/go.mod`, `backend/go.sum` (modified — added `github.com/resend/resend-go/v3`)
+- `frontend/app/_lib/auth.ts` (modified)
+- `frontend/app/system/profile/ProfileSettingsPanel.tsx` (added)
+- `frontend/app/system/profile/ProfilePageClient.tsx` (modified)
+- `frontend/app/system/verify-email/page.tsx` (added)
+- `frontend/app/system/verify-email/VerifyEmailClient.tsx` (added)
+- `.github/workflows/deploy.yml` (modified)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (modified)
+- `infra/k8s/backend/deployment.yaml` (modified)
+- `docs/api-spec.md` (modified)
+- `docs/architecture.md` (modified)
+- `docs/features.md` (modified)
+- `docs/superpowers/plans/2026-07-02-profile-settings.md` (added)
+
+**What changed:**
+- Added `email_verified` column and an `email_verification_tokens` table (single-use, 24h TTL) to Postgres
+- Added `GetUserByID`, `UpdateUsername`, `UpdateEmail`, `CreateEmailVerificationToken`, `VerifyEmailToken` to the DB layer
+- Added `services/email.Sender` interface with a Resend implementation (`ResendSender`) — sends a templated verification email with `username`/`verify_url` variables; no fallback sender, backend fails fast at startup if `RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`RESEND_TEMPLATE_ID` are unset
+- Added `auth.Service.UpdateUsername` (reissues session JWT since claims are keyed by username), `UpdateEmail` (resets verification, fires a verification email), `VerifyEmail`; `Signup` now sends a verification email when an email is provided
+- Added `PUT /auth/me/username`, `PUT /auth/me/email`, `POST /auth/verify-email` endpoints; `GET /auth/me` now includes `email_verified`
+- Built the "Profile settings" panel (previously empty) with independently-confirmable account name and email fields, plus a verified/not-verified pill
+- Added the `/_/verify-email` landing page that consumes the token from the emailed link
+- Wired `RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`RESEND_TEMPLATE_ID` through the GitHub Actions → Ansible → k3s deploy pipeline (API key as a k8s Secret, the other two via the existing ConfigMap)
+- Documented the new `/auth/*` endpoints in `docs/api-spec.md` and the email-sender abstraction in `docs/architecture.md`/`docs/features.md`
+
+**Why:** Users had no way to change their account name or email after signup, and there was no email verification concept. Requested as the first slice of profile settings; the email provider (Resend) and deploy-secret handling were decided during planning.
+
+---
+
 ## 2026-06-23 — fix: UserBubble as flex item instead of fixed overlay
 
 **Agent:** claude-sonnet-4-6

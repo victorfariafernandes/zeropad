@@ -30,6 +30,13 @@ dopad is an online instant file sharer. Any URL path is a "pad" — visit `dopad
 - Method picker UI on lock screen and encrypt form
 - Key and write token held in React refs; autosave re-encrypts on every edit
 
+### Profile Settings
+- Account name (login `username`) and email are independently editable, each with its own "Confirm change" button — edits aren't sent until confirmed
+- Renaming the account name reissues the session token, since JWT claims and login lookups are keyed by username
+- Changing the email resets `email_verified` to `false` and sends a new verification email; signup also sends one if an email was provided
+- Verification link (`/_/verify-email?token=...`) consumes a one-time, 24h-expiring token to mark the email verified
+- Emails are sent via Resend (`backend/services/email`); see [Architecture](architecture.md) for the sender abstraction
+
 ---
 
 ## Differentiators (target)

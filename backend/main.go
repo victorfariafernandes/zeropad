@@ -13,6 +13,7 @@ import (
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/middlewares"
 	authsvc "zeropad-backend/services/auth"
+	"zeropad-backend/services/email"
 	padsvc "zeropad-backend/services/pad"
 )
 
@@ -62,7 +63,20 @@ func main() {
 	padHandler.Register(mux, cors, middlewares.Reserved)
 
 	if database != nil {
-		svc := authsvc.NewService(database, jwtSecret)
+		resendAPIKey := os.Getenv("RESEND_API_KEY")
+		resendFrom := os.Getenv("RESEND_FROM_EMAIL")
+		resendTemplateID := os.Getenv("RESEND_TEMPLATE_ID")
+		if resendAPIKey == "" || resendFrom == "" || resendTemplateID == "" {
+			log.Fatal("RESEND_API_KEY, RESEND_FROM_EMAIL, and RESEND_TEMPLATE_ID env vars are required")
+		}
+		mailer := email.NewResendSender(resendAPIKey, resendFrom, resendTemplateID)
+
+		frontendURL := os.Getenv("FRONTEND_URL")
+		if frontendURL == "" {
+			frontendURL = origin
+		}
+
+		svc := authsvc.NewService(database, jwtSecret, mailer, frontendURL)
 
 		var passkey *authsvc.PasskeyService
 		rpID := os.Getenv("WEBAUTHN_RP_ID")
