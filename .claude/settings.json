@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); file=$(printf '%s' \"$input\" | jq -r '.tool_input.file_path // empty'); [ -z \"$file\" ] && exit 0; case \"$file\" in *.env|*.env.*) pattern='.*' ;; */backend/*.go|backend/*.go) pattern='os\\.Getenv' ;; */frontend/*.ts|*/frontend/*.tsx|frontend/*.ts|frontend/*.tsx) pattern='process\\.env' ;; */.github/workflows/*.yml|.github/workflows/*.yml|*/.github/workflows/*.yaml) pattern='secrets\\.|vars\\.' ;; */infra/ansible/*|infra/ansible/*) pattern='extra-vars|from-literal' ;; */infra/k8s/*|infra/k8s/*) pattern='secretKeyRef|configMapRef|value:' ;; *) exit 0 ;; esac; if [ \"$pattern\" = '.*' ] || grep -qE \"$pattern\" \"$file\" 2>/dev/null; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"This edit touches environment variable usage/config. Run the env-vars-report skill to check for deploy-pipeline drift (a var read in code but missing from GitHub Actions/ansible/k8s, or wired but unused) before finishing this task.\"}}'; fi",
+            "statusMessage": "Checking for env var changes..."
+          }
+        ]
+      }
+    ]
+  }
+}

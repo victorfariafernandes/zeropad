@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getMe, type User } from "@/app/_lib/auth";
+import { ApiKeysPanel } from "./ApiKeysPanel";
 import { ProfileSettingsPanel } from "./ProfileSettingsPanel";
 
 type Section = "profile" | "api" | "groups" | "billing";
@@ -63,6 +64,7 @@ export function ProfilePageClient() {
         {active === "profile" && (
           <ProfileSettingsPanel user={user} onUserChange={setUser} />
         )}
+        {active === "api" && <ApiKeysPanel />}
       </main>
     </div>
   );

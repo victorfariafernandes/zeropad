@@ -18,6 +18,79 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-07-03 — fix(api-access): CORS preflight routing + fix pre-existing pad-page crash found via E2E
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `backend/adapters/http/apikeys.go` (modified)
+- `backend/middlewares/cors.go` (modified)
+- `frontend/app/[slug]/PadPageClient.tsx` (modified)
+
+**What changed:**
+- Registered `OPTIONS` handlers (exact + subtree patterns) for `/api-keys`, `/roles`, and `/acl` in `apikeys.go`'s `Register`, mirroring the existing `OPTIONS /auth/` catch-all in `auth.go`. Go's method-specific route patterns (`"GET /api-keys"` etc.) don't implicitly answer `OPTIONS`, so every browser call carrying an `Authorization` header (all of them, for these routes) was failing its CORS preflight with a 405 and never reaching the real handler — `ApiKeysPanel` silently never loaded.
+- Added `DELETE` to `Access-Control-Allow-Methods` in `middlewares/cors.go`, which only listed `GET, PUT, POST, OPTIONS` — revoking a key, deleting a role, detaching a role, and revoking an ACL grant would all have been blocked by the browser even after the preflight-routing fix.
+- Fixed a **pre-existing, unrelated** bug surfaced by getting `pad.cy.ts` running against a properly-configured backend for the first time: `PadPageClient` initialized `slug` state to a placeholder `"_"` before its effect resolved the real slug, so `PadEditor` always mounted once with `slug="_"` and called `getPad("_")`. `middlewares/reserved.go` rejects any slug starting with `_` with `403`, which `getPad` doesn't special-case (only `404`), producing an unhandled promise rejection on every single pad-page load. Fixed by not rendering `PadEditor` until the real slug is resolved (`useState<string | null>(null)`), the same guarded-render pattern already used in `ProfilePageClient`.
+
+**Why:** Running the new `frontend/cypress/e2e/api-access.cy.ts` end-to-end (once local Postgres/Colima/stale-process issues were sorted out) surfaced these as real bugs rather than environment noise — confirmed via `curl` and manual browser Network-tab inspection that the backend behaved correctly for plain `/pads/{slug}` requests, isolating the crash to frontend code. All 14 E2E tests (`api-access.cy.ts` 11, `pad.cy.ts` 3) now pass.
+
+---
+
+## 2026-07-03 — test(api-access): add Cypress E2E coverage + local Postgres dev script
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `scripts/dev-postgres.sh` (added)
+- `frontend/cypress.config.ts` (modified — `setUserTier` task via direct Postgres connection, `apiUrl` env)
+- `frontend/cypress/e2e/api-access.cy.ts` (added)
+- `frontend/app/system/profile/ApiKeysPanel.tsx` (modified — add `data-cy="api-key-row"` for test targeting)
+- `frontend/package.json` / `pnpm-lock.yaml` (modified — add `pg`/`@types/pg` devDependencies)
+- `CLAUDE.md` (modified — document the new script and Cypress dev commands)
+
+**What changed:**
+- `scripts/dev-postgres.sh` starts (or resets, with `--reset`) a local `postgres:16-alpine` Docker container matching the connection string the backend and Cypress tests expect
+- `cypress.config.ts` gained a `setUserTier` task that connects directly to Postgres to flip a test account to the paid tier, since there's no self-service upgrade flow yet (billing is roadmap 3.8, unimplemented)
+- New E2E spec covers: free-tier key creation being blocked (403), creating/revealing an API key once, the default full-account access rule, restricted keys + role-based ACL grants (including a wildcard `slug_pattern`) narrowing a key to specific pads/actions, and revocation ending authentication
+
+**Why:** User asked for Cypress tests covering the API-access feature (keys, roles, ACL) just implemented. Testing paid-gated flows requires a paid test account, which requires a real Postgres instance locally — the dev script and Cypress task exist to make that reproducible without manual DB setup. Verified end-to-end afterward (see the following changelog entry for the bugs that surfaced and were fixed) — all 14 tests pass.
+
+---
+
+## 2026-07-03 — feat(api-access): add API keys, roles, and role-based ACL for programmatic pad CRUD
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `backend/adapters/db/migrations/004_pad_meta.sql` (added)
+- `backend/adapters/db/migrations/005_api_keys.sql` (added)
+- `backend/adapters/db/migrations/006_roles_acl.sql` (added)
+- `backend/adapters/db/migrations/007_api_usage.sql` (added)
+- `backend/adapters/db/migrations/008_users_tier.sql` (added)
+- `backend/adapters/db/db.go` (modified — embed and run new migrations)
+- `backend/adapters/db/user.go` (modified — add `Tier` field)
+- `backend/adapters/db/padmeta.go`, `apikey.go`, `role.go`, `acl.go`, `usage.go` (added)
+- `backend/services/apikey/service.go`, `limits.go` (added)
+- `backend/services/role/service.go` (added)
+- `backend/services/acl/service.go`, `service_test.go` (added)
+- `backend/services/pad/service.go` (modified — add `Delete`)
+- `backend/adapters/store/pad.go`, `oci.go`, `pad_test.go` (modified/added — add `Delete` to `PadStore`)
+- `backend/adapters/http/pad.go` (modified — extract shared `checkWriteToken`/`resolveHashedWriteToken` helpers)
+- `backend/adapters/http/apikeys.go`, `roles.go`, `acl.go`, `api_pads.go` (added)
+- `backend/middlewares/apikey.go` (added)
+- `backend/main.go` (modified — wire new services/handlers)
+- `frontend/app/_lib/apiKeys.ts` (added)
+- `frontend/app/system/profile/ApiKeysPanel.tsx` (added)
+- `frontend/app/system/profile/ProfilePageClient.tsx` (modified — render the new "API" tab)
+- `docs/api-spec.md`, `docs/architecture.md` (modified)
+
+**What changed:**
+- Added `pad_meta` (ownership), `api_keys`, `roles`, `acl`, `api_key_roles`, `api_usage` tables and a `users.tier` column
+- A paying user can create/list/edit/revoke API keys and manage roles (`can_read`/`can_write`/`can_delete`) via the new "API" tab in account settings
+- `POST/GET/DELETE /api/pads/{slug}` — API-key-authenticated pad CRUD; a key gets full access to its own account's pads by default, or scoped access via roles attached to it and ACL grants (`slug_pattern`, supporting a single trailing wildcard like `team/eng/*`) made by a pad's owner
+- Per-tier daily request and bandwidth (`bytes_in`/`bytes_out`) quotas, so one large read/write is charged against bandwidth even though it's a single request
+
+**Why:** Roadmap Phase 3.6 ("API for CRUD pads") and 3.4 ("ACL + Roles") called for letting paying users manage pads programmatically. Scoped to API-key access only (no user-specific ACL grants, no `accounts` table split) per explicit direction, leaving the human-sharing flow and full account model for a later, separate change.
+
+---
+
 ## 2026-07-02 — fix(deploy): read RESEND_FROM_EMAIL/RESEND_TEMPLATE_ID from Actions vars, not secrets
 
 **Agent:** claude-sonnet-5
@@ -28,6 +101,33 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 - Changed `RESEND_FROM_EMAIL` and `RESEND_TEMPLATE_ID` in the "Deploy to k3s cluster" step's `env:` block from `${{ secrets.* }}` to `${{ vars.* }}`
 
 **Why:** Production deploy failed — rollout timed out with the new pod crash-looping on `RESEND_API_KEY, RESEND_FROM_EMAIL, and RESEND_TEMPLATE_ID env vars are required`. Root cause: the user had registered `RESEND_FROM_EMAIL`/`RESEND_TEMPLATE_ID` under the Actions **Variables** tab, not **Secrets**, so `secrets.RESEND_FROM_EMAIL`/`secrets.RESEND_TEMPLATE_ID` silently resolved to empty strings (referencing an undefined secret name doesn't error). `RESEND_API_KEY` was correctly registered as a secret and was unaffected.
+
+---
+
+## 2026-07-02 — chore: add PostToolUse hook to flag env var drift on edit
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `.claude/settings.json` (added)
+
+**What changed:**
+- Added a `PostToolUse` hook (matcher `Write|Edit`) that inspects the edited file path and, for paths that can carry env var config (`backend/**/*.go`, `frontend/**/*.ts(x)`, `.github/workflows/*.yml`, `infra/ansible/**`, `infra/k8s/**`, `.env*`), greps the file for the relevant marker (`os.Getenv`, `process.env`, `secrets.`/`vars.`, `extra-vars`/`from-literal`, `secretKeyRef`/`configMapRef`/`value:`) and, on a match, injects additional context nudging the agent to run the `env-vars-report` skill before finishing.
+
+**Why:** Follow-up to the RESEND_FROM_EMAIL/RESEND_TEMPLATE_ID incident above — the user asked for an automatic check whenever env var usage is added, removed, or edited, so pipeline drift (a var read in code but never wired, or wired but never read) gets caught proactively instead of at deploy time.
+
+---
+
+## 2026-07-02 — chore: run env-vars-report skill via a Haiku subagent
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `.claude/commands/env-vars-report.md` (modified)
+
+**What changed:**
+- Added an "Execution mode" instruction directing the skill to always dispatch its scan to a subagent (`Agent` tool, `model: "haiku"`, `general-purpose`) instead of running the phases inline in the main conversation, and to relay the subagent's report back.
+- Added `Agent` to the command's `allowed-tools` frontmatter.
+
+**Why:** User requested this skill always run as a cheaper/faster Haiku subagent rather than consuming the main conversation's model and context.
 
 ---
 

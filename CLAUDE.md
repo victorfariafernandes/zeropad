@@ -12,6 +12,7 @@ docs/            Project docs — read before making changes
   api-spec.md
   features.md
   code-style.md
+scripts/         Local dev scripts (e.g. dev-postgres.sh)
 CHANGELOG.md     Updated by agents after every change (required)
 .claude/commands/  Custom slash commands for Claude Code
 ```
@@ -30,13 +31,15 @@ cd frontend && pnpm dev
 
 | Task | Command |
 |------|---------|
-| Run backend | `cd backend && go run main.go` |
+| Start local Postgres (Docker) | `eval "$(./scripts/dev-postgres.sh | tail -1)"` — exports `POSTGRES_URL` in the current shell |
+| Run backend | `cd backend && go run main.go` (requires `POSTGRES_URL` + `JWT_SECRET` for auth/API-access routes) |
 | Run frontend | `cd frontend && pnpm dev` |
 | Backend tests | `cd backend && go test ./...` |
 | Backend lint | `cd backend && go vet ./...` |
 | Frontend type-check | `cd frontend && npx tsc --noEmit` |
 | Frontend lint | `cd frontend && npx eslint` |
 | Frontend build | `cd frontend && pnpm build` |
+| Cypress E2E | `cd frontend && npx cypress run` (needs the local Postgres + backend + frontend all running) |
 
 ## Key conventions
 

@@ -12,9 +12,12 @@ import (
 	httpadapter "zeropad-backend/adapters/http"
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/middlewares"
+	aclsvc "zeropad-backend/services/acl"
+	apikeysvc "zeropad-backend/services/apikey"
 	authsvc "zeropad-backend/services/auth"
 	"zeropad-backend/services/email"
 	padsvc "zeropad-backend/services/pad"
+	rolesvc "zeropad-backend/services/role"
 )
 
 func selectStore() store.PadStore {
@@ -49,7 +52,8 @@ func main() {
 	}
 
 	padStore := selectStore()
-	padHandler := httpadapter.NewPadHandler(padsvc.New(padStore))
+	padService := padsvc.New(padStore)
+	padHandler := httpadapter.NewPadHandler(padService)
 
 	origin := os.Getenv("ALLOW_ORIGIN")
 	if origin == "" {
@@ -96,6 +100,16 @@ func main() {
 
 		authHandler := httpadapter.NewAuthHandler(svc, passkey, database, cors, session)
 		authHandler.Register(mux)
+
+		apiKeys := apikeysvc.New(database)
+		roles := rolesvc.New(database)
+		acl := aclsvc.New(database)
+
+		accessHandler := httpadapter.NewAPIAccessHandler(apiKeys, roles, acl, database, cors, session)
+		accessHandler.Register(mux)
+
+		apiPadsHandler := httpadapter.NewAPIPadsHandler(padService, acl, database)
+		apiPadsHandler.Register(mux, cors, middlewares.APIKey(apiKeys))
 	}
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

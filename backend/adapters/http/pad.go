@@ -133,28 +133,12 @@ func (h *PadHandler) HandleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if exists && existingPad.Encrypted && existingPad.HashedWriteToken != "" {
-		if body.WriteToken == "" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "write token required"})
-			return
-		}
-		if sha256Hex(body.WriteToken) != existingPad.HashedWriteToken {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid write token"})
-			return
-		}
+	if status, msg, ok := checkWriteToken(exists, existingPad, body.WriteToken); !ok {
+		writeJSON(w, status, map[string]string{"error": msg})
+		return
 	}
 
-	var newHashedToken string
-	switch {
-	case body.Encrypted && exists && existingPad.Encrypted && existingPad.HashedWriteToken != "" && body.NewWriteToken != "":
-		newHashedToken = sha256Hex(body.NewWriteToken)
-	case body.Encrypted && exists && existingPad.Encrypted && existingPad.HashedWriteToken != "":
-		newHashedToken = existingPad.HashedWriteToken
-	case body.Encrypted:
-		newHashedToken = sha256Hex(body.WriteToken)
-	default:
-		newHashedToken = ""
-	}
+	newHashedToken := resolveHashedWriteToken(exists, existingPad, body.Encrypted, body.WriteToken, body.NewWriteToken)
 
 	pad := store.Pad{
 		Content:          body.Content,
@@ -175,6 +159,38 @@ func (h *PadHandler) HandleSet(w http.ResponseWriter, r *http.Request) {
 		VerifyBlob: pad.VerifyBlob,
 		DeriverId:  pad.DeriverId,
 	})
+}
+
+// checkWriteToken validates a write request against an existing encrypted
+// pad's stored token hash. Returns ok=false with the status/message to write
+// if the token is missing or wrong; ok=true if the write may proceed.
+// Shared by the UI pad handler and the API-key pad handler.
+func checkWriteToken(exists bool, existingPad store.Pad, providedToken string) (status int, msg string, ok bool) {
+	if !exists || !existingPad.Encrypted || existingPad.HashedWriteToken == "" {
+		return 0, "", true
+	}
+	if providedToken == "" {
+		return http.StatusForbidden, "write token required", false
+	}
+	if sha256Hex(providedToken) != existingPad.HashedWriteToken {
+		return http.StatusForbidden, "invalid write token", false
+	}
+	return 0, "", true
+}
+
+// resolveHashedWriteToken computes the token hash to store for a write,
+// handling first encryption, unchanged re-encryption, and key-change flows.
+func resolveHashedWriteToken(exists bool, existingPad store.Pad, encrypted bool, writeToken, newWriteToken string) string {
+	switch {
+	case !encrypted:
+		return ""
+	case exists && existingPad.Encrypted && existingPad.HashedWriteToken != "" && newWriteToken != "":
+		return sha256Hex(newWriteToken)
+	case exists && existingPad.Encrypted && existingPad.HashedWriteToken != "":
+		return existingPad.HashedWriteToken
+	default:
+		return sha256Hex(writeToken)
+	}
 }
 
 func slugFrom(r *http.Request) string {

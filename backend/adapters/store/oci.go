@@ -84,6 +84,20 @@ func (s *OCIPadStore) Set(slug string, pad Pad) {
 	}
 }
 
+func (s *OCIPadStore) Delete(slug string) {
+	req := objectstorage.DeleteObjectRequest{
+		NamespaceName: common.String(s.namespace),
+		BucketName:    common.String(s.bucket),
+		ObjectName:    common.String(slug),
+	}
+	if _, err := s.client.DeleteObject(context.Background(), req); err != nil {
+		if svcErr, ok := common.IsServiceError(err); ok && svcErr.GetHTTPStatusCode() == http.StatusNotFound {
+			return
+		}
+		log.Printf("store: DeleteObject %q: %v", slug, err)
+	}
+}
+
 // apiKeyProviderFromEnv builds an API key config from environment variables.
 // Env vars: OCI_TENANCY_OCID, OCI_USER_OCID, OCI_FINGERPRINT,
 // OCI_PRIVATE_KEY (PEM content), OCI_REGION, OCI_PRIVATE_KEY_PASSPHRASE (optional).

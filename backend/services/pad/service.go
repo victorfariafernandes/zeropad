@@ -28,3 +28,8 @@ func (s *Service) Set(slug string, pad store.Pad) error {
 	s.pads.Set(slug, pad)
 	return nil
 }
+
+func (s *Service) Delete(slug string) error {
+	s.pads.Delete(slug)
+	return nil
+}

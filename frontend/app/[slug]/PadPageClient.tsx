@@ -6,7 +6,7 @@ import { PadEditor } from "./PadEditor";
 
 export function PadPageClient() {
   const router = useRouter();
-  const [slug, setSlug] = useState<string>("_");
+  const [slug, setSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = window.location.pathname.slice(1) || "_";
@@ -17,5 +17,6 @@ export function PadPageClient() {
     setSlug(raw);
   }, [router]);
 
+  if (slug === null) return null;
   return <PadEditor slug={slug} />;
 }

@@ -24,6 +24,7 @@ type User struct {
 	PasswordHash  string // empty if not set
 	WalletAddress string // empty if not set
 	EmailVerified bool
+	Tier          string // "free" or "paid"
 }
 
 type Passkey struct {
@@ -48,9 +49,9 @@ func (d *DB) CreateUser(ctx context.Context, username, email, passwordHash, wall
 	err := d.pool.QueryRow(ctx,
 		`INSERT INTO users (username, email, password_hash, wallet_address)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified`,
+		 RETURNING id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified, tier`,
 		username, emailVal, passwordHashVal, walletVal,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified, &u.Tier)
 	if err != nil {
 		if isDuplicateError(err, "users_username_key") {
 			return User{}, ErrDuplicateUsername
@@ -69,10 +70,10 @@ func (d *DB) CreateUser(ctx context.Context, username, email, passwordHash, wall
 func (d *DB) GetUserByUsername(ctx context.Context, username string) (User, bool, error) {
 	var u User
 	err := d.pool.QueryRow(ctx,
-		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified
+		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified, tier
 		 FROM users WHERE username = $1`,
 		username,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified, &u.Tier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -85,10 +86,10 @@ func (d *DB) GetUserByUsername(ctx context.Context, username string) (User, bool
 func (d *DB) GetUserByWallet(ctx context.Context, walletAddress string) (User, bool, error) {
 	var u User
 	err := d.pool.QueryRow(ctx,
-		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified
+		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified, tier
 		 FROM users WHERE wallet_address = $1`,
 		walletAddress,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified, &u.Tier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -101,10 +102,10 @@ func (d *DB) GetUserByWallet(ctx context.Context, walletAddress string) (User, b
 func (d *DB) GetUserByID(ctx context.Context, id string) (User, bool, error) {
 	var u User
 	err := d.pool.QueryRow(ctx,
-		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified
+		`SELECT id, username, COALESCE(email,''), COALESCE(password_hash,''), COALESCE(wallet_address,''), email_verified, tier
 		 FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.WalletAddress, &u.EmailVerified, &u.Tier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, false, nil
 	}

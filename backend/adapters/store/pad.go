@@ -17,6 +17,7 @@ type Pad struct {
 type PadStore interface {
 	Get(slug string) (Pad, bool)
 	Set(slug string, pad Pad)
+	Delete(slug string)
 }
 
 type MemoryPadStore struct {
@@ -38,5 +39,11 @@ func (s *MemoryPadStore) Get(slug string) (Pad, bool) {
 func (s *MemoryPadStore) Set(slug string, pad Pad) {
 	s.mu.Lock()
 	s.pads[slug] = pad
+	s.mu.Unlock()
+}
+
+func (s *MemoryPadStore) Delete(slug string) {
+	s.mu.Lock()
+	delete(s.pads, slug)
 	s.mu.Unlock()
 }

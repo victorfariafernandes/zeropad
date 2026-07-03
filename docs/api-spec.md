@@ -203,3 +203,110 @@ Consumes a one-time email verification token (sent via the link in the verificat
 { "error": "token is required" }
 { "error": "invalid or expired token" }
 ```
+
+---
+
+## API Access (Keys, Roles, ACL)
+
+Lets a paying user manage pads programmatically. See [Architecture](architecture.md) for the full data model and permission-check rule. All endpoints below except `/api/pads/*` require `Authorization: Bearer <session_token>` (dashboard actions by a logged-in human); `/api/pads/*` requires `Authorization: Bearer <api-key>` instead.
+
+### `POST /api-keys`
+
+Creates an API key for the authenticated (paid-tier) user.
+
+**Body:**
+```json
+{ "name": "ci-bot", "restricted": false }
+```
+
+**Response 201** — the raw `key` is shown only in this response, never again:
+```json
+{ "id": "...", "name": "ci-bot", "restricted": false, "created_at": "...", "key": "<raw key>" }
+```
+
+**Response 403:**
+```json
+{ "error": "paid tier required" }
+```
+
+### `GET /api-keys`
+
+Lists the caller's API keys (never includes the raw key or its hash).
+
+### `PUT /api-keys/{id}`
+
+Updates `name`/`restricted`. **Body:** `{ "name": "...", "restricted": true }`.
+
+### `DELETE /api-keys/{id}`
+
+Revokes a key (sets `revoked_at`; already-issued raw keys stop authenticating).
+
+### `POST /api-keys/{id}/roles`
+
+Attaches a role to a key. **Body:** `{ "role_id": "..." }`.
+
+### `GET /api-keys/{id}/roles`
+
+Returns the array of role IDs attached to the key.
+
+### `DELETE /api-keys/{id}/roles/{roleId}`
+
+Detaches a role from a key.
+
+### `POST /roles` / `GET /roles` / `PUT /roles/{id}` / `DELETE /roles/{id}`
+
+Manage named permission sets for the authenticated user's account.
+
+**Body (POST/PUT):**
+```json
+{ "name": "viewer", "can_read": true, "can_write": false, "can_delete": false }
+```
+
+**Response 409:**
+```json
+{ "error": "role name already exists" }
+```
+
+### `POST /acl` / `GET /acl` / `DELETE /acl/{id}`
+
+Manage ACL grants: "anyone holding `role_id` gets these permissions on pads matching `slug_pattern`." Requires the role to be attached to an API key (`POST /api-keys/{id}/roles`) before it takes effect for that key.
+
+**Body (POST):**
+```json
+{ "slug_pattern": "team/eng/*", "role_id": "..." }
+```
+
+`slug_pattern` is an exact slug (`"notes"`) or a single trailing wildcard (`"team/eng/*"`, matching any slug starting with `team/eng/`). Multi-segment or mid-path wildcards are rejected with `400`.
+
+**Response 400:**
+```json
+{ "error": "invalid slug pattern: wildcard must be a single trailing \"/*\"" }
+```
+
+### `POST /api/pads/{slug}` / `GET /api/pads/{slug}` / `DELETE /api/pads/{slug}`
+
+API-key-authenticated pad CRUD (roadmap 3.6). Unlike `/pads/{slug}`, `{slug}` may contain `/` (nested paths), since wildcard ACL grants target path prefixes.
+
+Request/response bodies are the same shape as `/pads/{slug}` (`content`, `encrypted`, `verify_blob`, `deriver_id`, `write_token`, `new_write_token` — encrypted pads still require `write_token`, independent of API-key ownership).
+
+A key with `restricted: false` (the default) gets full access to any pad already owned by its own account, and can create new pads (claimed on first write). Otherwise, access requires an attached role with a matching ACL grant.
+
+**Response 403:**
+```json
+{ "error": "forbidden" }
+```
+
+**Response 404:**
+```json
+{ "error": "pad not found" }
+```
+
+**Response 429** (daily request quota exceeded):
+```json
+{ "error": "rate limit exceeded" }
+```
+
+**Response 413** (daily bandwidth quota exceeded):
+```json
+{ "error": "bandwidth_limit", "limit_bytes": 53687091200, "tier": "paid" }
+```
