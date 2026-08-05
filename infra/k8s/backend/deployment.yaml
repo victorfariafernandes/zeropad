@@ -21,22 +21,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: backend-env
-          env:
-            - name: POSTGRES_URL
-              valueFrom:
-                secretKeyRef:
-                  name: zeropad-pg-app
-                  key: uri
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secrets
-                  key: JWT_SECRET
-            - name: RESEND_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secrets
-                  key: RESEND_API_KEY
           resources:
             requests:
               memory: "128Mi"
