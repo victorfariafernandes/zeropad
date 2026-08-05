@@ -43,3 +43,6 @@ frontend/next-env.d.ts
 # ansible secrets
 infra/ansible/files/origin.pem
 infra/ansible/files/origin.key
+
+# superpowers scratch workspace
+.superpowers/
