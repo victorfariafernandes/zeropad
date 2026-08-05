@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { UserBubble } from "@/app/components/UserBubble";
 import {
   checkVerifyBlob,
   decryptText,
@@ -303,7 +302,6 @@ export function PadEditor({ slug }: { slug: string }) {
           </Link>
           <div className="flex items-center gap-3">
             <span className="font-mono text-sm text-zinc-500">/{slug}</span>
-            <UserBubble />
           </div>
         </header>
         <div className="flex flex-col flex-1 items-center justify-center gap-4 p-8">
@@ -451,7 +449,6 @@ export function PadEditor({ slug }: { slug: string }) {
               {isEncrypted ? "Change key" : "Encrypt"}
             </button>
           )}
-          <UserBubble />
         </div>
       </header>
       <div className="flex items-center gap-2 px-4 py-2 border-b border-black/10 dark:border-white/10">
