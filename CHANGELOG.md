@@ -18,32 +18,6 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
-## 2026-08-05 — feat: remove account subsystem from backend
-
-**Agent:** claude-sonnet-5
-**Files changed:**
-- `backend/services/auth/` (deleted: `jwt.go`, `passkey.go`, `service.go`)
-- `backend/services/apikey/` (deleted: `limits.go`, `service.go`)
-- `backend/services/role/` (deleted: `service.go`)
-- `backend/services/acl/` (deleted: `service.go`, `service_test.go`)
-- `backend/services/email/` (deleted: `resend.go`, `sender.go`)
-- `backend/adapters/http/auth.go`, `profile.go`, `apikeys.go`, `roles.go`, `acl.go`, `api_pads.go` (deleted)
-- `backend/adapters/db/user.go`, `acl.go`, `apikey.go`, `padmeta.go`, `role.go`, `usage.go`, `db.go`, `db_test.go` (deleted)
-- `backend/middlewares/session.go`, `backend/middlewares/apikey.go` (deleted)
-- `backend/main.go` (modified — rewritten to only wire up the pad service/handler, CORS, and reserved-path middleware)
-- `backend/go.mod`, `backend/go.sum` (modified — `go mod tidy`)
-
-**What changed:**
-- Deleted the entire account subsystem: auth (JWT + passkey), API keys, roles, ACL, and email (Resend) services, their HTTP adapters, their Postgres adapters, and the session/API-key middlewares.
-- `adapters/db/` now contains only `migrations/` (SQL files kept as plain files for a later task; no Go code reads them anymore).
-- Rewrote `backend/main.go` to remove all Postgres/JWT/Resend/WebAuthn wiring — it now only selects a pad store (OCI or in-memory), builds the pad service/handler, and serves `/health`.
-- `go mod tidy` removed `github.com/ethereum/go-ethereum`, `github.com/go-webauthn/webauthn` (+ `github.com/go-webauthn/x`), `github.com/golang-jwt/jwt/v5`, `github.com/jackc/pgx/v5` (+ transitive `pgpassfile`/`pgservicefile`/`puddle`), and `github.com/resend/resend-go/v3`. `golang.org/x/crypto` and the OCI Go SDK remain (used transitively by `adapters/store`).
-- Verified `go build ./...`, `go vet ./...`, and `go test ./...` all pass cleanly after the removal; `adapters/store` and `services/pad` tests unaffected.
-
-**Why:** Task 1 of the "remove accounts" plan — dopad is pivoting to a fully anonymous, free service with no login/accounts/API keys. Pad storage never depended on Postgres (it only backed accounts), so the Postgres adapter is removed entirely along with the account subsystem it supported.
-
----
-
 ## 2026-07-03 — fix(api-access): CORS preflight routing + fix pre-existing pad-page crash found via E2E
 
 **Agent:** claude-sonnet-5
