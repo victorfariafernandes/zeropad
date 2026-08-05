@@ -49,7 +49,7 @@ app/
 |-----------|-------|
 | Language | Go 1.21 |
 | HTTP | `net/http` stdlib |
-| CORS | Hardcoded to `http://localhost:3000` |
+| CORS | Configurable via `ALLOW_ORIGIN` (default `http://localhost:3000`) |
 | Rate limit | 10 writes/min per IP (token bucket, `middlewares/ratelimit.go`) |
 
 Directory structure (layered architecture):
