@@ -23,10 +23,3 @@ resource "oci_objectstorage_bucket" "pads" {
   versioning     = "Disabled"
 }
 
-resource "oci_objectstorage_bucket" "postgres_backups" {
-  compartment_id = var.compartment_ocid
-  namespace      = var.object_storage_namespace
-  name           = "zeropad-postgres-backups"
-  access_type    = "NoPublicAccess"
-  versioning     = "Disabled"
-}

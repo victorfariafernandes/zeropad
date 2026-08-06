@@ -8,7 +8,3 @@ output "bucket_name" {
   value       = oci_objectstorage_bucket.pads.name
 }
 
-output "postgres_backups_bucket_name" {
-  description = "Name of the OCI bucket used for PostgreSQL WAL archiving and base backups."
-  value       = oci_objectstorage_bucket.postgres_backups.name
-}

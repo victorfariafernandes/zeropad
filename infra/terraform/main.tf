@@ -107,15 +107,6 @@ resource "oci_identity_policy" "backend_object_storage" {
   ]
 }
 
-resource "oci_identity_policy" "postgres_backup_object_storage" {
-  compartment_id = var.compartment_ocid
-  name           = "zeropad-postgres-backup-storage"
-  description    = "Allow backend VMs to manage objects in the postgres backup bucket"
-  statements = [
-    "Allow dynamic-group zeropad-backend to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = 'zeropad-postgres-backups'",
-  ]
-}
-
 module "dns" {
   source             = "./modules/dns"
   cloudflare_zone_id = var.cloudflare_zone_id
