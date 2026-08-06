@@ -144,14 +144,8 @@ jobs:
         working-directory: infra/ansible
         env:
           OCI_NAMESPACE: ${{ secrets.OCI_NAMESPACE }}
-          POSTGRES_BACKUP_ACCESS_KEY_ID: ${{ secrets.POSTGRES_BACKUP_ACCESS_KEY_ID }}
-          POSTGRES_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.POSTGRES_BACKUP_SECRET_ACCESS_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
-          RESEND_TEMPLATE_ID: ${{ vars.RESEND_TEMPLATE_ID }}
         run: |
           ansible-playbook playbook.yml \
             -i inventory.ini \
             --tags deploy \
-            --extra-vars "release_tag=${{ needs.tag.outputs.new_tag }} oci_namespace=$OCI_NAMESPACE postgres_backup_access_key_id=$POSTGRES_BACKUP_ACCESS_KEY_ID postgres_backup_secret_access_key=$POSTGRES_BACKUP_SECRET_ACCESS_KEY jwt_secret=$JWT_SECRET resend_api_key=$RESEND_API_KEY resend_from_email=$RESEND_FROM_EMAIL resend_template_id=$RESEND_TEMPLATE_ID"
+            --extra-vars "release_tag=${{ needs.tag.outputs.new_tag }} oci_namespace=$OCI_NAMESPACE"
