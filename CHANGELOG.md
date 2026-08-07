@@ -18,6 +18,78 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-08-06 — feat: remove accounts/login feature (auth, API keys, roles, ACL, profile, email, Postgres)
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+
+Backend:
+- `backend/adapters/db/acl.go` (deleted)
+- `backend/adapters/db/apikey.go` (deleted)
+- `backend/adapters/db/db.go` (modified — dropped Postgres connection/session wiring)
+- `backend/adapters/db/db_test.go` (deleted)
+- `backend/adapters/db/migrations/009_drop_accounts.sql` (added — teardown migration for account tables)
+- `backend/adapters/db/padmeta.go` (modified)
+- `backend/adapters/db/role.go` (deleted)
+- `backend/adapters/db/usage.go` (deleted)
+- `backend/adapters/db/user.go` (deleted)
+- `backend/adapters/http/acl.go` (deleted)
+- `backend/adapters/http/api_pads.go` (deleted)
+- `backend/adapters/http/apikeys.go` (deleted)
+- `backend/adapters/http/auth.go` (deleted)
+- `backend/adapters/http/profile.go` (deleted)
+- `backend/adapters/http/roles.go` (deleted)
+- `backend/go.mod`, `backend/go.sum` (modified — dropped Postgres/JWT/passkey/email dependencies)
+- `backend/main.go` (modified — removed route registration and DB bootstrap for the above)
+- `backend/middlewares/apikey.go` (deleted)
+- `backend/middlewares/session.go` (deleted)
+- `backend/services/acl/service.go`, `service_test.go` (deleted)
+- `backend/services/apikey/limits.go`, `service.go` (deleted)
+- `backend/services/auth/jwt.go`, `passkey.go`, `service.go` (deleted)
+- `backend/services/email/resend.go`, `sender.go` (deleted)
+- `backend/services/role/service.go` (deleted)
+
+Frontend:
+- `frontend/app/[slug]/PadEditor.tsx` (modified — removed auth-related usage)
+- `frontend/app/_lib/apiKeys.ts` (deleted)
+- `frontend/app/_lib/auth.ts` (deleted)
+- `frontend/app/components/UserBubble.tsx` (deleted)
+- `frontend/app/page.tsx` (modified — removed sign-in link)
+- `frontend/app/system/login/AuthPageClient.tsx`, `page.tsx` (deleted)
+- `frontend/app/system/profile/ApiKeysPanel.tsx`, `ProfilePageClient.tsx`, `ProfileSettingsPanel.tsx`, `page.tsx` (deleted)
+- `frontend/app/system/verify-email/VerifyEmailClient.tsx`, `page.tsx` (deleted)
+- `frontend/cypress.config.ts` (deleted — dropped the Postgres-backed `setUserTier` test task)
+- `frontend/cypress/e2e/api-access.cy.ts` (deleted)
+- `frontend/package.json`, `frontend/pnpm-lock.yaml` (modified — dropped now-unused dependencies)
+
+Docs:
+- `docs/api-spec.md` (modified — removed auth/API-key/roles/ACL endpoint sections)
+- `docs/architecture.md` (modified — removed account-subsystem/Postgres architecture description)
+- `docs/features.md` (modified — removed account-related feature entries)
+
+Infra/CI:
+- `.github/workflows/deploy.yml` (modified — removed account-related secrets/env wiring)
+- `infra/ansible/roles/k8s-manifests/tasks/main.yml` (modified — removed Postgres provisioning tasks)
+- `infra/k8s/backend/deployment.yaml` (modified — removed Postgres/JWT/email env vars)
+- `infra/k8s/postgres/cluster.yaml`, `namespace.yaml`, `scheduled-backup.yaml` (deleted)
+- `infra/terraform/main.tf` (modified — removed backup bucket wiring)
+- `infra/terraform/modules/storage/main.tf`, `outputs.tf` (modified — removed backup bucket resource/output)
+
+**What changed:**
+- Removed the entire account/login subsystem end to end: backend auth (password, SIWE wallet, passkeys), JWT sessions, profile settings, email verification (Resend), API keys, roles, and role-based ACL — along with every HTTP handler, service, DB adapter, and middleware that implemented them.
+- Added `backend/adapters/db/migrations/009_drop_accounts.sql`, a teardown migration dropping the Postgres tables (`users`, `api_keys`, `roles`, `acl_grants`, etc.) that backed the removed subsystem, and stripped the Postgres connection/session wiring from `db.go` and `main.go` now that the backend has no remaining stateful dependency.
+- Deleted the frontend login page, profile/API-keys/settings pages, `UserBubble`, and the `auth.ts`/`apiKeys.ts` client libs; removed the "Sign in" link from the homepage and the now-dead auth references in `PadEditor.tsx`.
+- Deleted `frontend/cypress/e2e/api-access.cy.ts` and `cypress.config.ts` (whose `setUserTier` task required a live Postgres connection) since there is no longer an account-gated flow to test.
+- Updated `docs/api-spec.md`, `docs/architecture.md`, and `docs/features.md` to drop all references to auth, API keys, roles, ACL, and Postgres, keeping the docs in sync with the now account-free system.
+- Removed the deploy-pipeline and infra wiring that only existed to support accounts: GitHub Actions secrets/env vars for JWT/Resend/Postgres in `deploy.yml`, the Ansible Postgres-provisioning tasks, the Kubernetes Postgres cluster/namespace/scheduled-backup manifests and the backend deployment's related env vars, and the Terraform backup storage bucket + IAM policy.
+- Verified via a smoke test (Task 10, no files changed): backend builds and starts cleanly with the reduced dependency set, all removed routes (`/auth/*`, `/api-keys`, `/roles`, `/acl`, `/system/profile`, `/system/login`, `/system/verify-email`) 404 as expected, the core pad read/write flow (`GET`/`PUT /pads/{slug}`) still works end to end, and the frontend renders with no leftover references to the removed UI.
+
+**Why:** dopad is repositioning as a free-only, no-account instant pad sharer — accounts, API keys, roles, and ACL added paid-tier/programmatic-access complexity that is no longer part of the product. Removing them also removes the Postgres dependency entirely, simplifying the backend to a stateless service and eliminating the k8s Postgres cluster, Ansible provisioning, and Terraform backup bucket that existed solely to support it.
+
+**Known gap:** browser-driven verification (manually clicking through the app) and `npx cypress run` could not be executed in the Task 10 sandbox — no browser tool was available, and the cached Cypress binary fails to launch in this environment. A human should run both manually before merging this branch.
+
+---
+
 ## 2026-07-03 — fix(api-access): CORS preflight routing + fix pre-existing pad-page crash found via E2E
 
 **Agent:** claude-sonnet-5
