@@ -26,10 +26,10 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 Backend:
 - `backend/adapters/db/acl.go` (deleted)
 - `backend/adapters/db/apikey.go` (deleted)
-- `backend/adapters/db/db.go` (modified — dropped Postgres connection/session wiring)
+- `backend/adapters/db/db.go` (deleted — Postgres connection/session wiring)
 - `backend/adapters/db/db_test.go` (deleted)
 - `backend/adapters/db/migrations/009_drop_accounts.sql` (added — teardown migration for account tables)
-- `backend/adapters/db/padmeta.go` (modified)
+- `backend/adapters/db/padmeta.go` (deleted)
 - `backend/adapters/db/role.go` (deleted)
 - `backend/adapters/db/usage.go` (deleted)
 - `backend/adapters/db/user.go` (deleted)
@@ -58,7 +58,7 @@ Frontend:
 - `frontend/app/system/login/AuthPageClient.tsx`, `page.tsx` (deleted)
 - `frontend/app/system/profile/ApiKeysPanel.tsx`, `ProfilePageClient.tsx`, `ProfileSettingsPanel.tsx`, `page.tsx` (deleted)
 - `frontend/app/system/verify-email/VerifyEmailClient.tsx`, `page.tsx` (deleted)
-- `frontend/cypress.config.ts` (deleted — dropped the Postgres-backed `setUserTier` test task)
+- `frontend/cypress.config.ts` (modified — dropped the Postgres-backed `setUserTier` test task, kept minimal e2e config)
 - `frontend/cypress/e2e/api-access.cy.ts` (deleted)
 - `frontend/package.json`, `frontend/pnpm-lock.yaml` (modified — dropped now-unused dependencies)
 
@@ -77,9 +77,9 @@ Infra/CI:
 
 **What changed:**
 - Removed the entire account/login subsystem end to end: backend auth (password, SIWE wallet, passkeys), JWT sessions, profile settings, email verification (Resend), API keys, roles, and role-based ACL — along with every HTTP handler, service, DB adapter, and middleware that implemented them.
-- Added `backend/adapters/db/migrations/009_drop_accounts.sql`, a teardown migration dropping the Postgres tables (`users`, `api_keys`, `roles`, `acl_grants`, etc.) that backed the removed subsystem, and stripped the Postgres connection/session wiring from `db.go` and `main.go` now that the backend has no remaining stateful dependency.
+- Added `backend/adapters/db/migrations/009_drop_accounts.sql`, a teardown migration dropping the Postgres tables (`users`, `api_keys`, `roles`, `acl_grants`, etc.) that backed the removed subsystem, deleted `db.go`'s Postgres connection/session wiring entirely, and stripped the corresponding bootstrap calls from `main.go` now that the backend has no remaining stateful dependency.
 - Deleted the frontend login page, profile/API-keys/settings pages, `UserBubble`, and the `auth.ts`/`apiKeys.ts` client libs; removed the "Sign in" link from the homepage and the now-dead auth references in `PadEditor.tsx`.
-- Deleted `frontend/cypress/e2e/api-access.cy.ts` and `cypress.config.ts` (whose `setUserTier` task required a live Postgres connection) since there is no longer an account-gated flow to test.
+- Deleted `frontend/cypress/e2e/api-access.cy.ts` and trimmed the now-unused Postgres-backed `setUserTier` task out of `cypress.config.ts`, since there is no longer an account-gated flow to test.
 - Updated `docs/api-spec.md`, `docs/architecture.md`, and `docs/features.md` to drop all references to auth, API keys, roles, ACL, and Postgres, keeping the docs in sync with the now account-free system.
 - Removed the deploy-pipeline and infra wiring that only existed to support accounts: GitHub Actions secrets/env vars for JWT/Resend/Postgres in `deploy.yml`, the Ansible Postgres-provisioning tasks, the Kubernetes Postgres cluster/namespace/scheduled-backup manifests and the backend deployment's related env vars, and the Terraform backup storage bucket + IAM policy.
 - Verified via a smoke test (Task 10, no files changed): backend builds and starts cleanly with the reduced dependency set, all removed routes (`/auth/*`, `/api-keys`, `/roles`, `/acl`, `/system/profile`, `/system/login`, `/system/verify-email`) 404 as expected, the core pad read/write flow (`GET`/`PUT /pads/{slug}`) still works end to end, and the frontend renders with no leftover references to the removed UI.
