@@ -48,7 +48,6 @@
 
 ### API calls
 - All backend calls must go through `apiFetch` from `app/_lib/api.ts` — never call `fetch()` directly
-- Never store auth tokens in `localStorage`; use `sessionStorage` only (key: `session_token`)
 
 ### Naming
 - Component files: `PascalCase.tsx` (e.g. `Login.tsx`)

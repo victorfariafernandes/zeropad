@@ -31,20 +31,19 @@ cd frontend && pnpm dev
 
 | Task | Command |
 |------|---------|
-| Start local Postgres (Docker) | `eval "$(./scripts/dev-postgres.sh | tail -1)"` — exports `POSTGRES_URL` in the current shell |
-| Run backend | `cd backend && go run main.go` (requires `POSTGRES_URL` + `JWT_SECRET` for auth/API-access routes) |
+| Start local Postgres (Docker) | `eval "$(./scripts/dev-postgres.sh | tail -1)"` — exports `POSTGRES_URL`; only needed to manually run `backend/adapters/db/migrations/009_drop_accounts.sql` against a leftover local instance, no other use remains |
+| Run backend | `cd backend && go run main.go` (no environment variables required) |
 | Run frontend | `cd frontend && pnpm dev` |
 | Backend tests | `cd backend && go test ./...` |
 | Backend lint | `cd backend && go vet ./...` |
 | Frontend type-check | `cd frontend && npx tsc --noEmit` |
 | Frontend lint | `cd frontend && npx eslint` |
 | Frontend build | `cd frontend && pnpm build` |
-| Cypress E2E | `cd frontend && npx cypress run` (needs the local Postgres + backend + frontend all running) |
+| Cypress E2E | `cd frontend && npx cypress run` (needs the backend + frontend running; no Postgres required) |
 
 ## Key conventions
 
 - All backend calls go through `apiFetch` in `app/_lib/api.ts` — never call `fetch()` directly
-- Auth tokens live in `sessionStorage["session_token"]` — never `localStorage`
 - Every Go HTTP handler calls `cors(w, r)` first and returns if it returns `true`
 - All Go JSON responses go through `writeJSON(w, statusCode, payload)`
 - `"use client"` required on any React component using hooks or browser APIs
