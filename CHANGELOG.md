@@ -75,10 +75,15 @@ Infra/CI:
 - `infra/terraform/main.tf` (modified — removed backup bucket wiring)
 - `infra/terraform/modules/storage/main.tf`, `outputs.tf` (modified — removed backup bucket resource/output)
 
+Housekeeping:
+- `.gitignore` (modified — ignores the `.superpowers/` scratch workspace used to plan this change)
+- `docs/superpowers/specs/2026-08-05-remove-accounts-design.md` (added — design spec)
+- `docs/superpowers/plans/2026-08-05-remove-accounts.md` (added — implementation plan)
+
 **What changed:**
 - Removed the entire account/login subsystem end to end: backend auth (password, SIWE wallet, passkeys), JWT sessions, profile settings, email verification (Resend), API keys, roles, and role-based ACL — along with every HTTP handler, service, DB adapter, and middleware that implemented them.
-- Added `backend/adapters/db/migrations/009_drop_accounts.sql`, a teardown migration dropping the Postgres tables (`users`, `api_keys`, `roles`, `acl_grants`, etc.) that backed the removed subsystem, deleted `db.go`'s Postgres connection/session wiring entirely, and stripped the corresponding bootstrap calls from `main.go` now that the backend has no remaining stateful dependency.
-- Deleted the frontend login page, profile/API-keys/settings pages, `UserBubble`, and the `auth.ts`/`apiKeys.ts` client libs; removed the "Sign in" link from the homepage and the now-dead auth references in `PadEditor.tsx`.
+- Added `backend/adapters/db/migrations/009_drop_accounts.sql`, a teardown migration dropping the Postgres tables (`users`, `api_keys`, `roles`, `acl`, etc.) that backed the removed subsystem, deleted `db.go`'s Postgres connection/session wiring entirely, and stripped the corresponding bootstrap calls from `main.go` now that the backend has no remaining stateful dependency.
+- Deleted the frontend login page, profile/API-keys/settings pages, `UserBubble` (whose removal is what dropped the homepage's "Sign in" link), and the `auth.ts`/`apiKeys.ts` client libs; removed the now-dead `<UserBubble />` usages and wrapping header markup from `page.tsx` and `PadEditor.tsx`.
 - Deleted `frontend/cypress/e2e/api-access.cy.ts` and trimmed the now-unused Postgres-backed `setUserTier` task out of `cypress.config.ts`, since there is no longer an account-gated flow to test.
 - Updated `docs/api-spec.md`, `docs/architecture.md`, and `docs/features.md` to drop all references to auth, API keys, roles, ACL, and Postgres, keeping the docs in sync with the now account-free system.
 - Removed the deploy-pipeline and infra wiring that only existed to support accounts: GitHub Actions secrets/env vars for JWT/Resend/Postgres in `deploy.yml`, the Ansible Postgres-provisioning tasks, the Kubernetes Postgres cluster/namespace/scheduled-backup manifests and the backend deployment's related env vars, and the Terraform backup storage bucket + IAM policy.
