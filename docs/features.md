@@ -35,4 +35,3 @@ dopad is an online instant file sharer. Any URL path is a "pad" — visit `dopad
 ## Differentiators (target)
 
 - **Multiple key derivation methods** — password (done), SIWE wallet (done), OAuth Google, Microsoft (planned)
-- **Premium tier** — unlimited TTL, larger file size limits, local LLM file analysis

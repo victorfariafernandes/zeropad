@@ -50,7 +50,7 @@ app/
 | Language | Go 1.21 |
 | HTTP | `net/http` stdlib |
 | CORS | Configurable via `ALLOW_ORIGIN` (default `http://localhost:3000`) |
-| Rate limit | 10 writes/min per IP (token bucket, `middlewares/ratelimit.go`) |
+| Rate limit | Not yet implemented — planned (roadmap), no per-IP write throttling exists today |
 
 Directory structure (layered architecture):
 ```
@@ -66,7 +66,7 @@ backend/
 │       └── pad.go              # Outward adapter: in-memory PadStore (RWMutex); Get/Set/Delete
 └── middlewares/
     ├── cors.go                 # CORS middleware wrapper (plugged via Register)
-    └── ratelimit.go            # Token-bucket per-IP rate limiter
+    └── reserved.go             # Blocks writes to reserved/system slugs
 ```
 
 Layer responsibilities:
@@ -164,3 +164,16 @@ decryptText(key, ciphertext) → plaintext  (never sent to server)
 | `ALLOW_ORIGIN` | Backend | `http://localhost:3000` — CORS allowed origin |
 | `OCI_BUCKET_NAME` | Backend | unset — with `OCI_NAMESPACE`, selects the OCI Object Storage pad store; otherwise falls back to in-memory |
 | `OCI_NAMESPACE` | Backend | unset — see `OCI_BUCKET_NAME` |
+
+---
+
+## Decommissioning the legacy Postgres instance
+
+The account subsystem (and its Postgres dependency) has been removed from the application, but a deployed Postgres instance and its Terraform-managed backup bucket may still be running in production. No automated migration or teardown runs anymore — the code that ever executed migrations was deleted along with the account subsystem. An operator with a live instance should, in order:
+
+1. (Optional) Run the teardown migration by hand to drop the account tables: `psql "$POSTGRES_URL" -f backend/adapters/db/migrations/009_drop_accounts.sql`
+2. Delete the CloudNativePG cluster: `kubectl delete cluster zeropad-pg -n postgres`
+3. Delete the postgres namespace: `kubectl delete ns postgres`
+4. Uninstall the CNPG operator: `helm uninstall cnpg -n cnpg-system`
+5. Empty the `zeropad-postgres-backups` OCI bucket (console or CLI) — Terraform cannot delete a non-empty bucket
+6. Only then run `terraform apply` to remove the bucket and IAM policy from state

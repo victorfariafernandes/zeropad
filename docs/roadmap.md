@@ -1,5 +1,7 @@
 # dopad — Monetization Roadmap
 
+> **Stale:** this roadmap predates the account-removal branch (2026-08). Accounts, login, sessions, passkeys, API keys, roles/ACL, and paid tiers have all been removed from the product; the plan below no longer reflects current direction for those features.
+
 Target: freemium model with **Free** and **Paid** tiers. Paid users subscribe via crypto — no KYC, no email, no card.
 
 ## Data model

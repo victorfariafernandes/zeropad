@@ -11,7 +11,7 @@
 
 - All responses: `Content-Type: application/json`
 - Errors always return `{ "error": "<message>" }`
-- CORS: allowed origin `http://localhost:3000`, methods `GET PUT OPTIONS`, header `Content-Type`
+- CORS: allowed origin configurable via `ALLOW_ORIGIN` (default `http://localhost:3000`), methods `GET, PUT, POST, DELETE, OPTIONS`, headers `Content-Type, X-Write-Token, Authorization`
 
 ---
 
@@ -61,7 +61,7 @@ Returns the content of a pad by slug.
 
 ### `PUT /pads/{slug}`
 
-Creates or overwrites a pad. Rate-limited to **10 requests/minute per IP**.
+Creates or overwrites a pad. Per-IP rate limiting is planned but not yet implemented.
 
 **Body:**
 ```json
@@ -114,7 +114,7 @@ For encrypted pads (key change — re-encryption with a new key):
 { "error": "invalid write token" }
 ```
 
-**Response 429:**
+**Response 429 (planned, not yet implemented):**
 ```json
 { "error": "rate limit exceeded" }
 ```

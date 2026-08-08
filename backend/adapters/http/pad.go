@@ -164,7 +164,6 @@ func (h *PadHandler) HandleSet(w http.ResponseWriter, r *http.Request) {
 // checkWriteToken validates a write request against an existing encrypted
 // pad's stored token hash. Returns ok=false with the status/message to write
 // if the token is missing or wrong; ok=true if the write may proceed.
-// Shared by the UI pad handler and the API-key pad handler.
 func checkWriteToken(exists bool, existingPad store.Pad, providedToken string) (status int, msg string, ok bool) {
 	if !exists || !existingPad.Encrypted || existingPad.HashedWriteToken == "" {
 		return 0, "", true
