@@ -46,9 +46,9 @@ Both servers must be running. Check and start if needed.
 
 **Backend:**
 ```bash
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/auth/nonce?address=0x0000000000000000000000000000000000000001
+curl -s http://localhost:8080/health
 ```
-If not 200/400, start it:
+Expect HTTP 200 with body `{"status":"ok"}`. If not, start it:
 ```bash
 cd backend && go run main.go &
 sleep 2
@@ -78,7 +78,6 @@ If Cypress is not installed, report: "Cypress not installed. Add `cypress` to `d
 
 Expected Cypress test files (once set up):
 - `cypress/e2e/pad.cy.ts` — visit a slug, type content, reload and verify content persists
-- `cypress/e2e/auth.cy.ts` — login page renders, wallet prompt visible
 - `cypress/e2e/encryption.cy.ts` — pad written in one session decrypts correctly in another
 
 **Stop background servers if we started them:**
@@ -113,7 +112,6 @@ kill %1 %2 2>/dev/null || true
 | Suite | Result | Details |
 |-------|--------|---------|
 | pad.cy.ts | PASS / FAIL / NOT CONFIGURED | |
-| auth.cy.ts | PASS / FAIL / NOT CONFIGURED | |
 | encryption.cy.ts | PASS / FAIL / NOT CONFIGURED | |
 
 ### Overall: PASS / FAIL
