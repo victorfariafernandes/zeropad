@@ -18,6 +18,21 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-08-10 — feat: add BTC "buy me a coffee" QR code to home page
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `frontend/app/components/BuyMeCoffee.tsx` (added)
+- `frontend/app/page.tsx` (modified — renders `<BuyMeCoffee />` below the slug input)
+- `frontend/package.json`, `frontend/pnpm-lock.yaml` (modified — added `qrcode` + `@types/qrcode`)
+
+**What changed:**
+- Added a client-side-generated QR code (via the `qrcode` package, no third-party network call) encoding the `bitcoin:` URI for a fixed BTC donation address, displayed below the home page's slug input with a "☕ Buy me a coffee" label and the address in monospace text underneath.
+
+**Why:** User requested a donation QR code just below the initial screen.
+
+---
+
 ## 2026-08-06 — feat: remove accounts/login feature (auth, API keys, roles, ACL, profile, email, Postgres)
 
 **Agent:** claude-sonnet-5

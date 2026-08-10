@@ -27,6 +27,7 @@
     "latex.js": "^0.12.6",
     "next": "16.2.4",
     "noble": "^1.9.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -35,6 +36,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/katex": "^0.16.8",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "cypress": "^13.17.0",

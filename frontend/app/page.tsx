@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BuyMeCoffee } from "@/app/components/BuyMeCoffee";
 
 export default function Home() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function Home() {
         </div>
         </main>
       </div>
+      <BuyMeCoffee />
     </div>
   );
 }
