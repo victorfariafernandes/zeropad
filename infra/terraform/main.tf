@@ -79,6 +79,8 @@ module "storage" {
   availability_domain      = local.availability_domain
   block_volume_size_gbs    = var.block_volume_size_gbs
   object_storage_namespace = data.oci_objectstorage_namespace.ns.namespace
+
+  depends_on = [oci_identity_policy.objectstorage_lifecycle_service]
 }
 
 module "compute" {
@@ -96,6 +98,15 @@ module "compute" {
   worker_vm_ocpus      = var.worker_vm_ocpus
   worker_vm_memory_gbs = var.worker_vm_memory_gbs
   worker_count         = var.worker_count
+}
+
+resource "oci_identity_policy" "objectstorage_lifecycle_service" {
+  compartment_id = var.compartment_ocid
+  name           = "zeropad-objectstorage-lifecycle"
+  description    = "Allow the Object Storage service to enforce lifecycle policies (TTL rules) on the pads bucket"
+  statements = [
+    "Allow service objectstorage-${var.region} to manage object-family in compartment id ${var.compartment_ocid} where target.bucket.name = 'zeropad-pads'",
+  ]
 }
 
 resource "oci_identity_policy" "backend_object_storage" {

@@ -23,3 +23,26 @@ resource "oci_objectstorage_bucket" "pads" {
   versioning     = "Disabled"
 }
 
+# Pads are written under a root-level "folder" (an object name prefix) that
+# maps 1:1 to a TTL. All pads currently go under "default/" with a 2-day
+# TTL. To offer a different TTL in the future, add another rule here scoped
+# to a new prefix (e.g. "long/") and have the backend write to that prefix
+# instead — existing prefixes/rules are untouched.
+resource "oci_objectstorage_object_lifecycle_policy" "pads" {
+  namespace = var.object_storage_namespace
+  bucket    = oci_objectstorage_bucket.pads.name
+
+  rules {
+    name       = "default-2-day-ttl"
+    action     = "DELETE"
+    is_enabled = true
+
+    object_name_filter {
+      inclusion_prefixes = ["default/"]
+    }
+
+    time_amount = "2"
+    time_unit   = "DAYS"
+  }
+}
+

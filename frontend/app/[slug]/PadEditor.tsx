@@ -16,6 +16,7 @@ import {
 import type { DeriverId } from "@/app/_lib/crypto";
 import { getPad, getPadContent, setPad } from "@/app/_lib/pads";
 import { DeriverSelect } from "./DeriverSelect";
+import { PadTimer } from "./PadTimer";
 import { ContentTypeSelect } from "./ContentTypeSelect";
 import { LanguageSelect } from "./LanguageSelect";
 import { RichTextEditor } from "./RichTextEditor";
@@ -34,6 +35,7 @@ export function PadEditor({ slug }: { slug: string }) {
   const [isEncrypted, setIsEncrypted] = useState(false);
   const [verifyBlob, setVerifyBlob] = useState("");
   const [deriverId, setDeriverId] = useState<DeriverId | "">("");
+  const [expiresAt, setExpiresAt] = useState<string | undefined>(undefined);
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
   const writeTokenRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -75,6 +77,7 @@ export function PadEditor({ slug }: { slug: string }) {
       }
       setIsEncrypted(pad.encrypted);
       setVerifyBlob(pad.verifyBlob);
+      setExpiresAt(pad.expiresAt);
       if (pad.encrypted) {
         setContent(pad.content);
         setDeriverId(pad.deriverId);
@@ -167,9 +170,11 @@ export function PadEditor({ slug }: { slug: string }) {
         const key = encryptionKeyRef.current;
         if (key) {
           const cipher = await encryptText(key, value);
-          await setPad(slug, { content: cipher, encrypted: true, verifyBlob, deriverId, writeToken: writeTokenRef.current ?? undefined });
+          const result = await setPad(slug, { content: cipher, encrypted: true, verifyBlob, deriverId, writeToken: writeTokenRef.current ?? undefined });
+          setExpiresAt(result.expiresAt);
         } else {
-          await setPad(slug, { content: value, encrypted: false, verifyBlob: "", deriverId: "" });
+          const result = await setPad(slug, { content: value, encrypted: false, verifyBlob: "", deriverId: "" });
+          setExpiresAt(result.expiresAt);
         }
         setSaveState("saved");
       } catch (err) {
@@ -212,7 +217,7 @@ export function PadEditor({ slug }: { slug: string }) {
       const blob = await makeVerifyBlob(key);
       const cipher = await encryptText(key, content);
       const oldToken = writeTokenRef.current;
-      await setPad(slug, {
+      const result = await setPad(slug, {
         content: cipher,
         encrypted: true,
         verifyBlob: blob,
@@ -220,6 +225,7 @@ export function PadEditor({ slug }: { slug: string }) {
         writeToken: oldToken ?? newToken,
         newWriteToken: oldToken !== null ? newToken : undefined,
       });
+      setExpiresAt(result.expiresAt);
       encryptionKeyRef.current = key;
       writeTokenRef.current = newToken;
       setVerifyBlob(blob);
@@ -251,7 +257,7 @@ export function PadEditor({ slug }: { slug: string }) {
       const blob = await makeVerifyBlob(key);
       const cipher = await encryptText(key, content);
       const oldToken = writeTokenRef.current;
-      await setPad(slug, {
+      const result = await setPad(slug, {
         content: cipher,
         encrypted: true,
         verifyBlob: blob,
@@ -259,6 +265,7 @@ export function PadEditor({ slug }: { slug: string }) {
         writeToken: oldToken ?? newToken,
         newWriteToken: oldToken !== null ? newToken : undefined,
       });
+      setExpiresAt(result.expiresAt);
       encryptionKeyRef.current = key;
       writeTokenRef.current = newToken;
       setVerifyBlob(blob);
@@ -302,6 +309,7 @@ export function PadEditor({ slug }: { slug: string }) {
           </Link>
           <div className="flex items-center gap-3">
             <span className="font-mono text-sm text-zinc-500">/{slug}</span>
+            <PadTimer expiresAt={expiresAt} />
           </div>
         </header>
         <div className="flex flex-col flex-1 items-center justify-center gap-4 p-8">
@@ -368,6 +376,7 @@ export function PadEditor({ slug }: { slug: string }) {
         </Link>
         <div className="flex items-center gap-3">
           <span className="font-mono text-sm text-zinc-500">/{slug}</span>
+          <PadTimer expiresAt={expiresAt} />
           <span className="text-xs text-zinc-400">
             {saveState === "saving" && "saving…"}
             {saveState === "saved" && "saved"}

@@ -2,6 +2,7 @@ package store
 
 import (
 	"sync"
+	"time"
 
 	"zeropad-backend/encryption"
 )
@@ -12,6 +13,7 @@ type Pad struct {
 	VerifyBlob       string             `json:"verify_blob"`
 	DeriverId        encryption.Deriver `json:"deriver_id"`
 	HashedWriteToken string             `json:"hashed_write_token"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type PadStore interface {

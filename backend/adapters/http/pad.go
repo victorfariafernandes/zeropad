@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"zeropad-backend/adapters/store"
 	"zeropad-backend/encryption"
@@ -58,12 +59,25 @@ type padResponse struct {
 	Encrypted  bool               `json:"encrypted"`
 	VerifyBlob string             `json:"verify_blob"`
 	DeriverId  encryption.Deriver `json:"deriver_id"`
+	ExpiresAt  *time.Time         `json:"expires_at,omitempty"`
 }
 
 type padMetaResponse struct {
 	Slug      string             `json:"slug"`
 	Encrypted bool               `json:"encrypted"`
 	DeriverId encryption.Deriver `json:"deriver_id"`
+	ExpiresAt *time.Time         `json:"expires_at,omitempty"`
+}
+
+// expiresAt returns the pad's computed expiry, or nil if UpdatedAt is unset
+// (a legacy pad, or an object outside defaultPrefix from before the TTL
+// feature) — nil means the client should render no countdown.
+func expiresAt(pad store.Pad) *time.Time {
+	if pad.UpdatedAt.IsZero() {
+		return nil
+	}
+	t := pad.UpdatedAt.Add(store.DefaultPadTTL)
+	return &t
 }
 
 func (h *PadHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +102,7 @@ func (h *PadHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 				Slug:      slug,
 				Encrypted: pad.Encrypted,
 				DeriverId: pad.DeriverId,
+				ExpiresAt: expiresAt(pad),
 			})
 			return
 		}
@@ -103,6 +118,7 @@ func (h *PadHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		Encrypted:  pad.Encrypted,
 		VerifyBlob: pad.VerifyBlob,
 		DeriverId:  pad.DeriverId,
+		ExpiresAt:  expiresAt(pad),
 	})
 }
 
@@ -146,6 +162,7 @@ func (h *PadHandler) HandleSet(w http.ResponseWriter, r *http.Request) {
 		VerifyBlob:       body.VerifyBlob,
 		DeriverId:        body.DeriverId,
 		HashedWriteToken: newHashedToken,
+		UpdatedAt:        time.Now().UTC(),
 	}
 	if err := h.svc.Set(slug, pad); err != nil {
 		log.Printf("Set pad %q: %v", slug, err)
@@ -158,6 +175,7 @@ func (h *PadHandler) HandleSet(w http.ResponseWriter, r *http.Request) {
 		Encrypted:  pad.Encrypted,
 		VerifyBlob: pad.VerifyBlob,
 		DeriverId:  pad.DeriverId,
+		ExpiresAt:  expiresAt(pad),
 	})
 }
 

@@ -30,6 +30,12 @@ dopad is an online instant file sharer. Any URL path is a "pad" — visit `dopad
 - Method picker UI on lock screen and encrypt form
 - Key and write token held in React refs; autosave re-encrypts on every edit
 
+### Storage & Retention
+- **2-day default TTL (OCI-backed deployments only)** — pads are written under a `default/` prefix in the OCI Object Storage bucket, which has a native lifecycle rule auto-deleting objects 2 days after their last-modified time, not original creation (`infra/terraform/modules/storage/main.tf`); no app-level cron or background job needed
+- **Prefix-per-TTL scheme** — a future differently-retained tier would write under a new prefix (e.g. `long/`) backed by its own lifecycle rule; see `backend/adapters/store/oci.go`
+- **In-memory store unaffected** — the in-memory `PadStore` (used when `OCI_BUCKET_NAME`/`OCI_NAMESPACE` are unset) has no TTL; pads live until the process restarts
+- **Visible expiry countdown** — the edit screen and the "this pad is encrypted" locked screen both show a live, per-second countdown (`frontend/app/[slug]/PadTimer.tsx`) computed from the pad's last-write time (`expires_at` in the API response); shown regardless of backend for UI consistency, but only OCI-backed deployments actually enforce the deletion. Pads with no recorded write time (written before this field existed) show no countdown. Every save (including autosave) refreshes the countdown back to ~48h, matching OCI's real last-modified-based deletion clock.
+
 ---
 
 ## Differentiators (target)

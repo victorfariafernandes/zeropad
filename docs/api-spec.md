@@ -29,18 +29,20 @@ Returns the content of a pad by slug.
 
 **Response 200 — unencrypted pad or legacy encrypted pad (no write token set):**
 ```json
-{ "slug": "my-page", "content": "hello world", "encrypted": false, "verify_blob": "", "deriver_id": "" }
+{ "slug": "my-page", "content": "hello world", "encrypted": false, "verify_blob": "", "deriver_id": "", "expires_at": "2026-08-12T14:32:01Z" }
 ```
 
 **Response 200 — encrypted pad, no `X-Write-Token` header (metadata only):**
 ```json
-{ "slug": "my-page", "encrypted": true, "deriver_id": "password" }
+{ "slug": "my-page", "encrypted": true, "deriver_id": "password", "expires_at": "2026-08-12T14:32:01Z" }
 ```
 
 **Response 200 — encrypted pad, valid `X-Write-Token` (full response):**
 ```json
-{ "slug": "my-page", "content": "<base64(iv||ciphertext)>", "encrypted": true, "verify_blob": "<base64(salt||iv||ciphertext)>", "deriver_id": "password" }
+{ "slug": "my-page", "content": "<base64(iv||ciphertext)>", "encrypted": true, "verify_blob": "<base64(salt||iv||ciphertext)>", "deriver_id": "password", "expires_at": "2026-08-12T14:32:01Z" }
 ```
+
+`expires_at` (ISO 8601, optional): present only when the pad has a recorded last-write time; computed server-side as last-write + 48h. Absent for pads written before this field existed (no fabricated value is returned).
 
 **Response 400:**
 ```json
@@ -99,8 +101,9 @@ For encrypted pads (key change — re-encryption with a new key):
 
 **Response 200:**
 ```json
-{ "slug": "my-page", "content": "...", "encrypted": true, "verify_blob": "...", "deriver_id": "password" }
+{ "slug": "my-page", "content": "...", "encrypted": true, "verify_blob": "...", "deriver_id": "password", "expires_at": "2026-08-12T14:32:01Z" }
 ```
+`expires_at` — see `GET /pads/{slug}` above; every successful `PUT` refreshes it to last-write + 48h.
 
 **Response 400:**
 ```json

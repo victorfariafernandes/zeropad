@@ -10,14 +10,31 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/common/auth"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 )
 
+// defaultPrefix is prepended to every object name written to OCI. It maps to
+// the "default-2-day-ttl" object lifecycle rule on the pads bucket
+// (infra/terraform/modules/storage/main.tf), which deletes objects under
+// this prefix 2 days after their last-modified time. A future TTL tier
+// would use a different prefix backed by its own lifecycle rule.
+const defaultPrefix = "default/"
+
+// DefaultPadTTL is how long a pad written under defaultPrefix survives
+// before OCI's lifecycle rule deletes it ("default-2-day-ttl", time_amount=2
+// / time_unit=DAYS). It is used to compute the expires_at surfaced to
+// clients; it does not itself trigger deletion — OCI's own lifecycle policy
+// does that, based on object Last-Modified time, which is why Pad.UpdatedAt
+// must be refreshed on every write. A future TTL tier would pair a new
+// prefix + lifecycle rule with its own constant here.
+const DefaultPadTTL = 48 * time.Hour
+
 // OCIPadStore implements PadStore backed by OCI Object Storage.
-// Each pad is stored as a JSON-encoded object named by its slug.
+// Each pad is stored as a JSON-encoded object named by defaultPrefix+slug.
 type OCIPadStore struct {
 	client    objectstorage.ObjectStorageClient
 	namespace string
@@ -45,7 +62,7 @@ func (s *OCIPadStore) Get(slug string) (Pad, bool) {
 	req := objectstorage.GetObjectRequest{
 		NamespaceName: common.String(s.namespace),
 		BucketName:    common.String(s.bucket),
-		ObjectName:    common.String(slug),
+		ObjectName:    common.String(defaultPrefix + slug),
 	}
 	resp, err := s.client.GetObject(context.Background(), req)
 	if err != nil {
@@ -74,7 +91,7 @@ func (s *OCIPadStore) Set(slug string, pad Pad) {
 	req := objectstorage.PutObjectRequest{
 		NamespaceName: common.String(s.namespace),
 		BucketName:    common.String(s.bucket),
-		ObjectName:    common.String(slug),
+		ObjectName:    common.String(defaultPrefix + slug),
 		ContentType:   common.String("application/json"),
 		ContentLength: common.Int64(int64(len(body))),
 		PutObjectBody: io.NopCloser(bytes.NewReader(body)),
@@ -88,7 +105,7 @@ func (s *OCIPadStore) Delete(slug string) {
 	req := objectstorage.DeleteObjectRequest{
 		NamespaceName: common.String(s.namespace),
 		BucketName:    common.String(s.bucket),
-		ObjectName:    common.String(slug),
+		ObjectName:    common.String(defaultPrefix + slug),
 	}
 	if _, err := s.client.DeleteObject(context.Background(), req); err != nil {
 		if svcErr, ok := common.IsServiceError(err); ok && svcErr.GetHTTPStatusCode() == http.StatusNotFound {

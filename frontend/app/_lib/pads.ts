@@ -8,6 +8,7 @@ export type PadData = {
   deriverId: DeriverId | "";
   writeToken?: string;
   newWriteToken?: string;
+  expiresAt?: string;
 };
 
 export async function getPad(slug: string): Promise<PadData | null> {
@@ -19,12 +20,14 @@ export async function getPad(slug: string): Promise<PadData | null> {
     encrypted: boolean;
     verify_blob?: string;
     deriver_id: string;
+    expires_at?: string;
   };
   return {
     content: body.content ?? "",
     encrypted: body.encrypted,
     verifyBlob: body.verify_blob ?? "",
     deriverId: (body.deriver_id ?? "") as DeriverId | "",
+    expiresAt: body.expires_at,
   };
 }
 
@@ -39,16 +42,18 @@ export async function getPadContent(slug: string, writeToken: string): Promise<P
     encrypted: boolean;
     verify_blob: string;
     deriver_id: string;
+    expires_at?: string;
   };
   return {
     content: body.content,
     encrypted: body.encrypted,
     verifyBlob: body.verify_blob,
     deriverId: (body.deriver_id ?? "") as DeriverId | "",
+    expiresAt: body.expires_at,
   };
 }
 
-export async function setPad(slug: string, data: PadData): Promise<void> {
+export async function setPad(slug: string, data: PadData): Promise<{ expiresAt?: string }> {
   const res = await apiFetch(`/pads/${slug}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -64,4 +69,6 @@ export async function setPad(slug: string, data: PadData): Promise<void> {
   if (res.status === 429) throw new Error("rate limit exceeded");
   if (res.status === 403) throw new Error("write token invalid");
   if (!res.ok) throw new Error("failed to save pad");
+  const body = (await res.json()) as { expires_at?: string };
+  return { expiresAt: body.expires_at };
 }

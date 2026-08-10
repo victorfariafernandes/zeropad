@@ -18,6 +18,53 @@ This file is maintained by AI agents. Every time an agent makes any change to th
 
 ---
 
+## 2026-08-10 — feat: add live expiry countdown timer to pad screens
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `backend/adapters/store/pad.go` (modified — added `UpdatedAt time.Time` field to `Pad`)
+- `backend/adapters/store/oci.go` (modified — added `DefaultPadTTL = 48 * time.Hour` constant next to `defaultPrefix`)
+- `backend/adapters/http/pad.go` (modified — added `expires_at` to `padResponse`/`padMetaResponse`, `expiresAt()` helper, stamps `UpdatedAt` on every `HandleSet`, never on `HandleGet`)
+- `backend/adapters/http/pad_test.go` (added — table-driven tests: fresh-write expiry, GET doesn't re-stamp, write refreshes expiry, legacy pad omits `expires_at`)
+- `frontend/app/_lib/pads.ts` (modified — `PadData.expiresAt`, `getPad`/`getPadContent` parse `expires_at`, `setPad` now returns `{ expiresAt }` instead of discarding the PUT response body)
+- `frontend/app/[slug]/PadTimer.tsx` (added — client component: per-second countdown, verbose breakdown format, amber/red color escalation, renders nothing when `expiresAt` is undefined)
+- `frontend/app/[slug]/PadEditor.tsx` (modified — `expiresAt` state, `<PadTimer>` in both the locked and unlocked headers, all 4 `setPad` call sites now refresh `expiresAt` on success)
+- `docs/features.md` (modified — documented the visible countdown; corrected "after creation" to "after last write")
+- `docs/api-spec.md` (modified — added `expires_at` to all GET/PUT response examples plus a field description)
+
+**What changed:**
+- Added a `UpdatedAt` timestamp to the `Pad` domain struct, stamped only in `HandleSet` (every write, including autosaves) and never in `HandleGet` — this mirrors OCI's actual lifecycle deletion behavior, which resets its own clock on every object overwrite (Last-Modified-based, not creation-based).
+- The backend now derives `expires_at` (`UpdatedAt + 48h`) at response time for both `GET` and `PUT /pads/{slug}`, omitting it entirely (not `null`) for pads with no recorded write time — legacy pads written before this field existed, or objects outside the `default/` TTL prefix.
+- Store and service layers (`PadStore`, `MemoryPadStore`, `OCIPadStore`, `services/pad`) needed zero changes — they already round-trip the whole `Pad` struct, so the new field flows through automatically.
+- Added `PadTimer.tsx`, a small client component ticking every second via `setInterval`, formatting the remaining time as `1d 23h 59m 42s` → `23h 59m 12s` → `5m 03s` → `42s`, with color escalation (amber under 6h, red under 1h, "expired" at zero).
+- Wired the timer into both `PadEditor.tsx` headers (locked "this pad is encrypted" screen and the unlocked edit screen), and updated all 4 `setPad` call sites to refresh the displayed countdown after every successful save, since editing resets the real expiry.
+- Verified end-to-end against a running backend: a fresh `PUT` returns `expires_at` ~48h out, a subsequent `GET` returns the identical value (no re-stamp on read), and a second `PUT` returns a later `expires_at` (refresh on write) — all three confirmed via direct HTTP calls, in addition to the new Go test suite.
+
+**Why:** the 2-day OCI lifecycle TTL added earlier was invisible to users — nothing told them a pad would expire or how much time was left. This makes it visible everywhere a pad can be viewed, kept honest by tying the displayed countdown to the same last-write semantics OCI actually uses for deletion.
+
+**Known gap:** no browser automation tool is available in this sandbox (and the cached Cypress binary still fails to launch here), so the timer's live ticking/color-transition behavior was verified via TypeScript/ESLint passing plus a direct API contract check (fresh write, stable GET, refresh-on-write) rather than visual confirmation in an actual browser. A human should do a quick visual pass before considering this fully done.
+
+---
+
+## 2026-08-10 — feat: add 2-day default TTL to OCI-backed pads
+
+**Agent:** claude-sonnet-5
+**Files changed:**
+- `backend/adapters/store/oci.go` (modified — writes/reads/deletes objects under a `default/` prefix instead of flat slug names)
+- `infra/terraform/modules/storage/main.tf` (modified — added `oci_objectstorage_object_lifecycle_policy.pads`, a rule deleting objects under `default/` 2 days after creation)
+- `docs/features.md` (modified — documented the new Storage & Retention behavior)
+
+**What changed:**
+- Introduced a prefix-per-TTL scheme for the OCI Object Storage pad store: every pad is now written to `default/<slug>` instead of `<slug>`, and a native OCI bucket lifecycle rule auto-deletes anything under that prefix 2 days after creation — no app-level expiry code needed.
+- A future differently-retained tier can be added later by writing to a new prefix (e.g. `long/`) backed by its own lifecycle rule, without touching the `default/` rule.
+- **Not migrated:** pads written before this change (flat object names, no prefix) are unaffected by the new rule and remain in the bucket indefinitely; only pads created after this deploys land under `default/`.
+- The in-memory store (used when OCI env vars are unset) is untouched — no TTL concept there.
+- Terraform change validated (`terraform validate`, `terraform plan` — 1 resource to add, 0 changed, 0 destroyed) but **not yet applied**.
+
+**Why:** User requested a default 2-day TTL for all pads going forward, using OCI's native object lifecycle management rather than an app-side expiry job, with room to add other TTL tiers later via additional prefixes/rules.
+
+---
+
 ## 2026-08-10 — feat: add BTC "buy me a coffee" QR code to home page
 
 **Agent:** claude-sonnet-5
